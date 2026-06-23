@@ -377,11 +377,14 @@ function generateRootReadme(problems) {
   c += `|:---:|---------|:----------:|:--------:|:----:|\n`;
 
   sorted.forEach(p => {
-    const link = `[${p.title}](problems/${p.folderName})`;
+    // Ensure number exists (fallback: parse from folderName like '0169-Majority-Element')
+    const num = p.number || parseInt(p.folderName?.match(/^(\d+)/)?.[1], 10) || '?';
+    const folder = p.folderName || buildFolderName(num, p.title);
+    const link = `[${p.title}](problems/${folder})`;
     const diffEmoji = { Easy: '🟢', Medium: '🟡', Hard: '🔴' }[p.difficulty] || '⚪';
     const diff = `${diffEmoji} ${p.difficulty}`;
     const date = p.date || today;
-    c += `| ${p.number} | ${link} | ${diff} | \`${p.language}\` | ${date} |\n`;
+    c += `| ${num} | ${link} | ${diff} | \`${p.language}\` | ${date} |\n`;
   });
 
   c += `\n---\n\n`;
@@ -569,6 +572,7 @@ async function pushToGitHub(problemData) {
   const solvedProblems = stats2.solvedProblems || {};
 
   solvedProblems[number] = {
+    number,
     title,
     difficulty,
     language: langInfo.name,
