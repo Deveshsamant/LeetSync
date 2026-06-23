@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icons/icon128.png" alt="LeetSync Logo" width="100" />
+<img src="logo.png" alt="LeetSync Logo" width="120" />
 
 # ⚡ LeetSync
 
