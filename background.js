@@ -584,23 +584,58 @@ async function pushToGitHub(problemData) {
 
 /**
  * Update the root README.md with the index of all solved problems.
+ * 
+ * IMPORTANT: To support multiple devices, we read the existing README
+ * from GitHub and parse the problems table to get the current list,
+ * then merge the new problem in. This way we never lose problems
+ * that were pushed from a different laptop.
  */
 async function updateRootReadme(repo, newProblem) {
-  // Get existing solved problems from local storage
-  const stats = await chrome.storage.local.get(['solvedProblems']);
-  const solvedProblems = stats.solvedProblems || {};
-
-  // Add/update the new problem
-  solvedProblems[newProblem.number] = newProblem;
-
-  // Build the problems list
-  const problems = Object.values(solvedProblems);
-
-  // Generate README content
-  const readmeContent = generateRootReadme(problems);
-
-  // Check if root README exists
+  // Step 1: Fetch the existing README from GitHub
   const existingReadme = await getFile(repo, 'README.md');
+  let existingProblems = {};
+
+  // Step 2: Parse the problem table from the existing README (if any)
+  if (existingReadme) {
+    try {
+      // Decode the base64 content
+      const content = atob(existingReadme.content.replace(/\n/g, ''));
+      
+      // Parse table rows: | 1 | [Two Sum](problems/0001-Two-Sum) | 🟢 Easy | `Java` | 2026-06-23 |
+      const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*[🟢🟡🔴⚪]\s*(\w+)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
+      let match;
+      while ((match = tableRowRegex.exec(content)) !== null) {
+        const num = parseInt(match[1], 10);
+        existingProblems[num] = {
+          number: num,
+          title: match[2],
+          folderName: match[3],
+          difficulty: match[4],
+          language: match[5],
+          date: match[6],
+        };
+      }
+      console.log(`[LeetSync] Parsed ${Object.keys(existingProblems).length} problems from existing README`);
+    } catch (parseError) {
+      console.warn('[LeetSync] Could not parse existing README, will rebuild:', parseError.message);
+    }
+  }
+
+  // Step 3: Also merge with local storage (catches any that might have been missed)
+  const stats = await chrome.storage.local.get(['solvedProblems']);
+  const localProblems = stats.solvedProblems || {};
+  
+  // Merge: GitHub README problems + local problems + new problem
+  // GitHub README is the source of truth, local fills gaps, new problem overwrites
+  const mergedProblems = { ...existingProblems, ...localProblems };
+  mergedProblems[newProblem.number] = newProblem;
+
+  // Step 4: Save merged list back to local storage (sync this device)
+  await chrome.storage.local.set({ solvedProblems: mergedProblems });
+
+  // Step 5: Generate and push the new README
+  const problems = Object.values(mergedProblems);
+  const readmeContent = generateRootReadme(problems);
 
   await putFile(
     repo,
@@ -609,6 +644,8 @@ async function updateRootReadme(repo, newProblem) {
     'Update README with solved problems index',
     existingReadme?.sha || null
   );
+
+  console.log(`[LeetSync] Root README updated with ${problems.length} total problems`);
 }
 
 // ── Message Listener ─────────────────────────────────────────

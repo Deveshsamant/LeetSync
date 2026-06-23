@@ -46,32 +46,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = tokenInput.value.trim();
     const repo = repoInput.value.trim();
 
-    if (!token) {
-      showMessage('Please enter your GitHub Personal Access Token.', 'error');
-      tokenInput.focus();
+    if (!token && !repo) {
+      showMessage('Please enter at least a token or repo name.', 'error');
       return;
     }
 
-    if (!repo) {
-      showMessage('Please enter your repository name (owner/repo).', 'error');
-      repoInput.focus();
-      return;
-    }
-
-    // Validate repo format
-    if (!repo.includes('/') || repo.split('/').length !== 2) {
+    // Validate repo format if provided
+    if (repo && (!repo.includes('/') || repo.split('/').length !== 2)) {
       showMessage('Repository must be in "owner/repo" format.', 'error');
       repoInput.focus();
       return;
     }
 
-    // Save to storage
+    // Save whichever fields are filled
     setButtonLoading(saveBtn, true);
+    const toSave = {};
+    if (token) toSave.githubToken = token;
+    if (repo)  toSave.githubRepo = repo;
 
-    chrome.storage.sync.set({ githubToken: token, githubRepo: repo }, () => {
+    chrome.storage.sync.set(toSave, () => {
       setButtonLoading(saveBtn, false);
-      showMessage('✅ Settings saved successfully!', 'success');
-      setStatus('connected', 'Connected');
+
+      if (token && repo) {
+        showMessage('✅ Both token and repo saved!', 'success');
+        setStatus('connected', 'Connected');
+      } else if (token) {
+        showMessage('✅ Token saved! Add a repo name to complete setup.', 'success');
+        setStatus('disconnected', 'Needs Repo');
+      } else {
+        showMessage('✅ Repo saved! Add a token to complete setup.', 'success');
+        setStatus('disconnected', 'Needs Token');
+      }
     });
   });
 
