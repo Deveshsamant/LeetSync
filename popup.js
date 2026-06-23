@@ -107,11 +107,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (response && response.success) {
             const visibility = response.private ? '🔒 Private' : '🌐 Public';
+            const statsInfo = (response.solvedCount > 0)
+              ? ` • ${response.solvedCount} problems synced`
+              : '';
             showMessage(
-              `✅ Connected to <strong>${response.repoName}</strong> (${visibility})`,
+              `✅ Connected to <strong>${response.repoName}</strong> (${visibility})${statsInfo}`,
               'success'
             );
             setStatus('connected', 'Connected');
+            // Refresh the stats display with synced data
+            loadStats();
           } else {
             const error = response?.error || 'Could not connect';
             showMessage(`❌ ${error}`, 'error');

@@ -526,13 +526,16 @@ async function pushToGitHub(problemData) {
 
   const fullCode = headerLines + '\n' + code;
 
-  // Always create a new file (sol1, sol2 are different files — never overwrite)
+  // Check if file exists (edge case: re-push from different device)
+  const existingSol = await getFile(repo, solutionPath);
   await putFile(
     repo,
     solutionPath,
     fullCode,
-    `Add sol${nextSolNum}: ${number}. ${title} (${langInfo.name})`,
-    null  // no SHA — always a new file
+    existingSol
+      ? `Update sol${nextSolNum}: ${number}. ${title} (${langInfo.name})`
+      : `Add sol${nextSolNum}: ${number}. ${title} (${langInfo.name})`,
+    existingSol?.sha || null
   );
 
   console.log(`[LeetSync] ✅ Solution file pushed: ${solutionFileName}`);
@@ -667,7 +670,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'TEST_CONNECTION') {
     testGitHubConnection(message.repo)
-      .then((result) => sendResponse(result))
+      .then(async (result) => {
+        // On successful verify, sync stats from GitHub README
+        if (result.success) {
+          try {
+            const synced = await syncStatsFromGitHub(message.repo);
+            result.pushCount = synced.pushCount;
+            result.solvedCount = synced.solvedCount;
+          } catch (e) {
+            console.warn('[LeetSync] Could not sync stats:', e.message);
+          }
+        }
+        sendResponse(result);
+      })
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
@@ -680,6 +695,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         solvedCount: Object.keys(data.solvedProblems || {}).length,
       });
     });
+    return true;
+  }
+
+  if (message.type === 'SYNC_STATS') {
+    syncStatsFromGitHub(message.repo)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
 });
@@ -726,6 +748,57 @@ async function testGitHubConnection(repo) {
     }
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Sync local stats from the GitHub README.
+ * Reads the existing README, parses the problems table,
+ * and updates local storage so the popup shows correct counts
+ * on any device.
+ */
+async function syncStatsFromGitHub(repo) {
+  const existingReadme = await getFile(repo, 'README.md');
+  let parsedProblems = {};
+
+  if (existingReadme) {
+    try {
+      const content = atob(existingReadme.content.replace(/\n/g, ''));
+
+      // Parse table rows from the README
+      const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*[🟢🟡🔴⚪]\s*(\w+)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
+      let match;
+      while ((match = tableRowRegex.exec(content)) !== null) {
+        const num = parseInt(match[1], 10);
+        parsedProblems[num] = {
+          number: num,
+          title: match[2],
+          folderName: match[3],
+          difficulty: match[4],
+          language: match[5],
+          date: match[6],
+        };
+      }
+    } catch (e) {
+      console.warn('[LeetSync] Could not parse README for stats:', e.message);
+    }
+  }
+
+  // Merge with existing local data (keep richer local data, add missing from GitHub)
+  const local = await chrome.storage.local.get(['solvedProblems', 'pushCount']);
+  const localProblems = local.solvedProblems || {};
+  const merged = { ...parsedProblems, ...localProblems };
+
+  const solvedCount = Object.keys(merged).length;
+  const pushCount = Math.max(local.pushCount || 0, solvedCount);
+
+  await chrome.storage.local.set({
+    solvedProblems: merged,
+    pushCount: pushCount,
+  });
+
+  console.log(`[LeetSync] Stats synced: ${solvedCount} problems, ${pushCount} pushes`);
+
+  return { success: true, solvedCount, pushCount };
 }
 
 // ── Auto Re-injection on Extension Load ──────────────────────
