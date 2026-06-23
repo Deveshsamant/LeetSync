@@ -108,21 +108,32 @@ async function getFile(repo, path) {
 
 /**
  * Create or update a file in the repository.
+ * Automatically handles 409 SHA conflicts by re-fetching and retrying.
  */
 async function putFile(repo, path, content, message, sha = null) {
-  const body = {
-    message,
-    content: unicodeToBase64(content),
-  };
+  const encodedContent = unicodeToBase64(content);
 
-  if (sha) {
-    body.sha = sha;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const body = { message, content: encodedContent };
+    if (sha) body.sha = sha;
+
+    try {
+      return await githubAPI(`/repos/${repo}/contents/${path}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      // 409 = SHA conflict (file changed since we last read it)
+      // 422 = SHA missing (file exists but we didn't provide SHA)
+      if (attempt === 1 && (error.message.includes('409') || error.message.includes('422'))) {
+        console.warn(`[LeetSync] SHA conflict on ${path}, re-fetching and retrying...`);
+        const freshFile = await getFile(repo, path);
+        sha = freshFile?.sha || null;
+        continue;
+      }
+      throw error;
+    }
   }
-
-  return githubAPI(`/repos/${repo}/contents/${path}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  });
 }
 
 // ── Language Mapping (duplicated from utils.js for service worker) ──
