@@ -751,52 +751,75 @@ async function testGitHubConnection(repo) {
 }
 
 /**
- * Sync local stats from the GitHub README.
- * Reads the existing README, parses the problems table,
- * and updates local storage so the popup shows correct counts
- * on any device.
+ * Sync local stats from the GitHub repo.
+ * Uses the Trees API to get the FULL repo file list in ONE call,
+ * then counts actual solution files (sol1.java, sol2.py, etc.)
+ * to get the true push count across all devices.
  */
 async function syncStatsFromGitHub(repo) {
-  const existingReadme = await getFile(repo, 'README.md');
   let parsedProblems = {};
+  let totalPushCount = 0;
 
-  if (existingReadme) {
-    try {
-      const content = atob(existingReadme.content.replace(/\n/g, ''));
+  try {
+    // Get entire repo tree in one API call
+    const tree = await githubAPI(`/repos/${repo}/git/trees/main?recursive=true`);
 
-      // Parse table rows from the README
-      const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*[🟢🟡🔴⚪]\s*(\w+)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
-      let match;
-      while ((match = tableRowRegex.exec(content)) !== null) {
-        const num = parseInt(match[1], 10);
-        parsedProblems[num] = {
-          number: num,
-          title: match[2],
-          folderName: match[3],
-          difficulty: match[4],
-          language: match[5],
-          date: match[6],
-        };
+    if (tree && tree.tree) {
+      // Count solution files: problems/*/sol*.ext
+      const solFileRegex = /^problems\/([^/]+)\/sol\d+\.\w+$/;
+      const problemFolders = new Set();
+
+      tree.tree.forEach(item => {
+        if (item.type === 'blob') {
+          const match = item.path.match(solFileRegex);
+          if (match) {
+            totalPushCount++;
+            problemFolders.add(match[1]);
+          }
+        }
+      });
+
+      // Now parse the README for richer problem data (title, difficulty, etc.)
+      const existingReadme = await getFile(repo, 'README.md');
+      if (existingReadme) {
+        try {
+          const content = atob(existingReadme.content.replace(/\n/g, ''));
+          const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*[🟢🟡🔴⚪]\s*(\w+)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
+          let m;
+          while ((m = tableRowRegex.exec(content)) !== null) {
+            const num = parseInt(m[1], 10);
+            parsedProblems[num] = {
+              number: num,
+              title: m[2],
+              folderName: m[3],
+              difficulty: m[4],
+              language: m[5],
+              date: m[6],
+            };
+          }
+        } catch (e) {
+          console.warn('[LeetSync] Could not parse README:', e.message);
+        }
       }
-    } catch (e) {
-      console.warn('[LeetSync] Could not parse README for stats:', e.message);
     }
+  } catch (e) {
+    console.warn('[LeetSync] Could not fetch repo tree:', e.message);
   }
 
-  // Merge with existing local data (keep richer local data, add missing from GitHub)
+  // Merge with existing local data
   const local = await chrome.storage.local.get(['solvedProblems', 'pushCount']);
   const localProblems = local.solvedProblems || {};
   const merged = { ...parsedProblems, ...localProblems };
 
   const solvedCount = Object.keys(merged).length;
-  const pushCount = Math.max(local.pushCount || 0, solvedCount);
+  const pushCount = Math.max(totalPushCount, local.pushCount || 0);
 
   await chrome.storage.local.set({
     solvedProblems: merged,
     pushCount: pushCount,
   });
 
-  console.log(`[LeetSync] Stats synced: ${solvedCount} problems, ${pushCount} pushes`);
+  console.log(`[LeetSync] Stats synced: ${solvedCount} problems, ${pushCount} total pushes`);
 
   return { success: true, solvedCount, pushCount };
 }
