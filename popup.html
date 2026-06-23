@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeetSync</title>
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="popup-header">
+      <div class="logo-row">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#grad1)" />
+            <path d="M2 17L12 22L22 17" stroke="url(#grad2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M2 12L12 17L22 12" stroke="url(#grad3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <defs>
+              <linearGradient id="grad1" x1="2" y1="2" x2="22" y2="12">
+                <stop stop-color="#ffa116" />
+                <stop offset="1" stop-color="#ff6b35" />
+              </linearGradient>
+              <linearGradient id="grad2" x1="2" y1="17" x2="22" y2="22">
+                <stop stop-color="#ffa116" />
+                <stop offset="1" stop-color="#ff6b35" />
+              </linearGradient>
+              <linearGradient id="grad3" x1="2" y1="12" x2="22" y2="17">
+                <stop stop-color="#ffa116" />
+                <stop offset="1" stop-color="#ff6b35" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>LeetSync</h1>
+          <span class="logo-subtitle">Auto-push to GitHub</span>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge status-disconnected">
+        <span class="status-dot"></span>
+        <span id="statusText">Not Connected</span>
+      </div>
+    </div>
+
+    <!-- Settings Form -->
+    <div class="popup-body">
+      <div class="form-group">
+        <label for="githubToken">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          GitHub Personal Access Token
+        </label>
+        <div class="input-wrapper">
+          <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+          <button type="button" id="toggleToken" class="toggle-btn" title="Show/Hide token">
+            <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+        <span class="form-hint">
+          <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" id="createTokenLink">
+            🔑 Get your token here →
+          </a>
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="githubRepo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+          </svg>
+          Repository
+        </label>
+        <input type="text" id="githubRepo" placeholder="username/leetcode-solutions" autocomplete="off" spellcheck="false" />
+        <span class="form-hint">Format: owner/repo-name</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="btn-row">
+        <button id="saveBtn" class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+            <polyline points="17,21 17,13 7,13 7,21"/>
+            <polyline points="7,3 7,8 15,8"/>
+          </svg>
+          Save Settings
+        </button>
+        <button id="verifyBtn" class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+            <polyline points="22,4 12,14.01 9,11.01"/>
+          </svg>
+          Verify
+        </button>
+      </div>
+
+      <!-- Status Message -->
+      <div id="statusMessage" class="status-message" style="display:none;"></div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="popup-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="statPushCount">0</div>
+        <div class="stat-label">Pushes</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-value" id="statSolvedCount">0</div>
+        <div class="stat-label">Problems</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-value" id="statLastPush">—</div>
+        <div class="stat-label">Last Push</div>
+      </div>
+    </div>
+
+    <!-- Footer with branding -->
+    <div class="popup-footer">
+      <span>Made by</span>
+      <a href="https://deveshsamant.in/" target="_blank" id="portfolioLink">Devesh Samant</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
