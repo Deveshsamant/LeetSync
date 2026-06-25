@@ -364,7 +364,11 @@
       } else {
         const statusMsg = result?.status_msg || 'Unknown';
         console.log('[LeetSync] ❌ Not accepted:', statusMsg);
-        showToast(`Submission: ${statusMsg}. Not pushing to GitHub.`, 'warning');
+        if (statusMsg === 'Wrong Answer') {
+          showToast('HAHHAHAHAA Fool TRY AGAIN 🤡', 'error', 5000);
+        } else {
+          showToast(`Submission: ${statusMsg}. Not pushing to GitHub.`, 'warning');
+        }
       }
     }
   });
