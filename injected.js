@@ -13,7 +13,7 @@
   'use strict';
 
   // Version-based guard: allows re-injection when extension updates
-  const INJECTOR_VERSION = 2;
+  const INJECTOR_VERSION = 3;
   if (window.__lcPusherVersion >= INJECTOR_VERSION) return;
   window.__lcPusherVersion = INJECTOR_VERSION;
 
@@ -45,11 +45,12 @@
         const cloned = response.clone();
         cloned.json().then(data => {
           if (data && data.submission_id) {
-            console.log('[LeetSync] ✦ Real SUBMIT detected, ID:', data.submission_id);
-            pendingSubmissions.add(data.submission_id);
+            const sid = parseInt(data.submission_id, 10);
+            console.log('[LeetSync] ✦ Real SUBMIT detected, ID:', sid);
+            pendingSubmissions.add(sid);
             window.postMessage({
               type: '__LC_PUSHER_SUBMISSION__',
-              submissionId: data.submission_id,
+              submissionId: sid,
             }, '*');
           }
         }).catch(() => {});
@@ -57,22 +58,28 @@
 
       // ── Detect submission check result → /submissions/detail/{id}/check/ ──
       if (url.includes('/submissions/detail/') && url.includes('/check/')) {
+        // Extract submission ID from the URL (response body may not have it)
+        const urlIdMatch = url.match(/\/submissions\/detail\/(\d+)\/check/);
+        const urlSubId = urlIdMatch ? parseInt(urlIdMatch[1], 10) : null;
+
         const cloned = response.clone();
         cloned.json().then(data => {
           if (data && data.state === 'SUCCESS') {
-            const subId = data.submission_id;
+            // Try: URL ID, response body ID, or response body submission_id
+            const subId = urlSubId || data.submission_id || data.id;
 
             // ONLY process if this is a REAL submission (not Run Code)
             if (subId && pendingSubmissions.has(subId)) {
               console.log('[LeetSync] ✦ Real submission result:', data.status_msg, '(ID:', subId, ')');
-              pendingSubmissions.delete(subId); // Clean up
+              pendingSubmissions.delete(subId);
+              // Attach the submission_id to the result data for content.js
+              data.submission_id = subId;
               window.postMessage({
                 type: '__LC_PUSHER_RESULT__',
                 result: data,
               }, '*');
             } else {
-              // This is from Run Code / interpret_solution — ignore silently
-              console.log('[LeetSync] ⊘ Ignoring Run Code result (not a real submit)');
+              console.log('[LeetSync] ⊘ Ignoring non-submit result (ID:', subId, 'pending:', [...pendingSubmissions], ')');
             }
           }
         }).catch(() => {});
@@ -107,8 +114,9 @@
         try {
           const data = JSON.parse(self.responseText);
           if (data && data.submission_id) {
-            console.log('[LeetSync] ✦ Real SUBMIT detected via XHR, ID:', data.submission_id);
-            pendingSubmissions.add(data.submission_id);
+            const sid = parseInt(data.submission_id, 10);
+            console.log('[LeetSync] ✦ Real SUBMIT detected via XHR, ID:', sid);
+            pendingSubmissions.add(sid);
             window.postMessage({
               type: '__LC_PUSHER_SUBMISSION__',
               submissionId: data.submission_id,
@@ -120,20 +128,24 @@
 
     // ── Only relay check results for REAL submissions ──
     if (url.includes('/submissions/detail/') && url.includes('/check/')) {
+      const xhrUrlMatch = url.match(/\/submissions\/detail\/(\d+)\/check/);
+      const xhrSubId = xhrUrlMatch ? parseInt(xhrUrlMatch[1], 10) : null;
+
       self.addEventListener('load', function () {
         try {
           const data = JSON.parse(self.responseText);
           if (data && data.state === 'SUCCESS') {
-            const subId = data.submission_id;
+            const subId = xhrSubId || data.submission_id || data.id;
             if (subId && pendingSubmissions.has(subId)) {
               console.log('[LeetSync] ✦ Real submission result via XHR:', data.status_msg);
               pendingSubmissions.delete(subId);
+              data.submission_id = subId;
               window.postMessage({
                 type: '__LC_PUSHER_RESULT__',
                 result: data,
               }, '*');
             } else {
-              console.log('[LeetSync] ⊘ Ignoring Run Code result via XHR');
+              console.log('[LeetSync] ⊘ Ignoring non-submit result via XHR');
             }
           }
         } catch (e) {}
