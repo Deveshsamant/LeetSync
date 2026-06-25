@@ -136,11 +136,7 @@
     if (statusMsg === 'Wrong Answer') {
       // Escalating roasts based on streak
       wrongStreak++;
-      const streakPrefix = wrongStreak >= 5
-        ? `🔥 ${wrongStreak} wrong in a row! `
-        : wrongStreak >= 3
-        ? `❌ ${wrongStreak}x wrong! `
-        : '';
+      const streakPrefix = `❌ Wrong #${wrongStreak}: `;
       pool = WRONG_ANSWER_ROASTS;
       // Pick from later (more savage) messages as streak grows
       const minIndex = Math.min(Math.floor((wrongStreak - 1) / 2) * 3, pool.length - 5);
