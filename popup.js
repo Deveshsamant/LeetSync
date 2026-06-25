@@ -186,4 +186,135 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ── Problems List ─────────────────────────────────────────
+
+  const problemsToggle = document.getElementById('problemsToggle');
+  const problemsChevron = document.getElementById('problemsChevron');
+  const problemsWrapper = document.getElementById('problemsWrapper');
+  const problemsList = document.getElementById('problemsList');
+  let problemsLoaded = false;
+
+  // Toggle open/close
+  problemsToggle.addEventListener('click', () => {
+    const isOpen = problemsWrapper.style.display !== 'none';
+    problemsWrapper.style.display = isOpen ? 'none' : 'block';
+    problemsChevron.classList.toggle('open', !isOpen);
+
+    // Load problems on first open
+    if (!isOpen && !problemsLoaded) {
+      loadProblems();
+    }
+  });
+
+  function loadProblems() {
+    problemsLoaded = true;
+    problemsList.innerHTML = '<div class="problems-empty">Loading...</div>';
+
+    chrome.runtime.sendMessage({ type: 'GET_PROBLEMS' }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        problemsList.innerHTML = '<div class="problems-empty">Failed to load</div>';
+        return;
+      }
+
+      renderProblems(response.problems);
+    });
+  }
+
+  function renderProblems(problems) {
+    if (!problems || problems.length === 0) {
+      problemsList.innerHTML = '<div class="problems-empty">No problems synced yet</div>';
+      return;
+    }
+
+    problemsList.innerHTML = '';
+
+    problems.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'problem-item';
+      item.dataset.number = p.number;
+
+      const diffClass = `difficulty-${(p.difficulty || 'easy').toLowerCase()}`;
+
+      item.innerHTML = `
+        <span class="problem-number">#${p.number}</span>
+        <div class="problem-info">
+          <div class="problem-title">${p.title}</div>
+          <div class="problem-meta">
+            <span class="difficulty-badge ${diffClass}">${p.difficulty || '?'}</span>
+            <span class="problem-lang">${p.language || ''}</span>
+            <span class="problem-sols">${p.solutionCount > 1 ? `${p.solutionCount} sols` : ''}</span>
+          </div>
+        </div>
+        <button class="problem-delete" title="Delete from GitHub" data-number="${p.number}" data-folder="${p.folderName}">🗑️</button>
+      `;
+
+      // Delete button with confirmation
+      const deleteBtn = item.querySelector('.problem-delete');
+      let confirmTimeout = null;
+
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        // First click → confirm state
+        if (!deleteBtn.classList.contains('confirm')) {
+          deleteBtn.classList.add('confirm');
+          deleteBtn.textContent = 'Sure?';
+          confirmTimeout = setTimeout(() => {
+            deleteBtn.classList.remove('confirm');
+            deleteBtn.textContent = '🗑️';
+          }, 3000);
+          return;
+        }
+
+        // Second click → actually delete
+        clearTimeout(confirmTimeout);
+        deleteBtn.classList.remove('confirm');
+        deleteBtn.classList.add('deleting');
+        deleteBtn.innerHTML = '<div class="spinner"></div>';
+
+        chrome.runtime.sendMessage({
+          type: 'DELETE_PROBLEM',
+          problemNumber: p.number,
+          folderName: p.folderName,
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            showMessage(`Error: ${chrome.runtime.lastError.message}`, 'error');
+            deleteBtn.classList.remove('deleting');
+            deleteBtn.textContent = '🗑️';
+            return;
+          }
+
+          if (response?.success) {
+            // Animate removal
+            item.style.transition = 'all 0.3s ease';
+            item.style.opacity = '0';
+            item.style.maxHeight = '0';
+            item.style.padding = '0 14px';
+            item.style.overflow = 'hidden';
+
+            setTimeout(() => {
+              item.remove();
+              // Check if list is now empty
+              if (problemsList.children.length === 0) {
+                problemsList.innerHTML = '<div class="problems-empty">No problems synced yet</div>';
+              }
+            }, 300);
+
+            // Update stats
+            statPushCount.textContent = response.pushCount || 0;
+            statSolvedCount.textContent = response.solvedCount || 0;
+
+            showMessage(`🗑️ Deleted <strong>${p.title}</strong> from GitHub`, 'success');
+          } else {
+            showMessage(`Failed to delete: ${response?.error || 'Unknown error'}`, 'error');
+            deleteBtn.classList.remove('deleting');
+            deleteBtn.textContent = '🗑️';
+          }
+        });
+      });
+
+      problemsList.appendChild(item);
+    });
+  }
 });

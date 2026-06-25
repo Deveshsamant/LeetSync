@@ -4,6 +4,9 @@
    This script intercepts the page's actual fetch/XHR calls
    to detect LeetCode submission events, and relays them
    to the content script via window.postMessage.
+   
+   IMPORTANT: Only /submit/ triggers a push. /interpret_solution/
+   (Run Code) is intentionally ignored to prevent false pushes.
    ============================================================ */
 
 (function () {
@@ -13,6 +16,11 @@
   window.__lcPusherInjected = true;
 
   console.log('[LeetSync] Main world interceptor loaded');
+
+  // ── Track pending REAL submissions ──────────────────────────
+  // Only submission IDs from /submit/ are tracked.
+  // /interpret_solution/ (Run Code) IDs are NOT tracked.
+  const pendingSubmissions = new Set();
 
   // Save the true original only once (survives re-injection)
   if (!window.__lcOriginalFetch) {
@@ -26,12 +34,13 @@
     try {
       const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
 
-      // Detect submission POST → /problems/{slug}/submit/
+      // ── Detect REAL submission POST → /problems/{slug}/submit/ ──
       if (url.includes('/problems/') && url.includes('/submit/')) {
         const cloned = response.clone();
         cloned.json().then(data => {
           if (data && data.submission_id) {
-            console.log('[LeetCode Pusher] ✦ Submission detected via fetch, ID:', data.submission_id);
+            console.log('[LeetSync] ✦ Real SUBMIT detected, ID:', data.submission_id);
+            pendingSubmissions.add(data.submission_id);
             window.postMessage({
               type: '__LC_PUSHER_SUBMISSION__',
               submissionId: data.submission_id,
@@ -40,16 +49,25 @@
         }).catch(() => {});
       }
 
-      // Detect submission check result → /submissions/detail/{id}/check/
+      // ── Detect submission check result → /submissions/detail/{id}/check/ ──
       if (url.includes('/submissions/detail/') && url.includes('/check/')) {
         const cloned = response.clone();
         cloned.json().then(data => {
           if (data && data.state === 'SUCCESS') {
-            console.log('[LeetCode Pusher] ✦ Submission result via fetch:', data.status_msg);
-            window.postMessage({
-              type: '__LC_PUSHER_RESULT__',
-              result: data,
-            }, '*');
+            const subId = data.submission_id;
+
+            // ONLY process if this is a REAL submission (not Run Code)
+            if (subId && pendingSubmissions.has(subId)) {
+              console.log('[LeetSync] ✦ Real submission result:', data.status_msg, '(ID:', subId, ')');
+              pendingSubmissions.delete(subId); // Clean up
+              window.postMessage({
+                type: '__LC_PUSHER_RESULT__',
+                result: data,
+              }, '*');
+            } else {
+              // This is from Run Code / interpret_solution — ignore silently
+              console.log('[LeetSync] ⊘ Ignoring Run Code result (not a real submit)');
+            }
           }
         }).catch(() => {});
       }
@@ -77,12 +95,14 @@
     const self = this;
     const url = self.__lcUrl || '';
 
+    // ── Only track REAL submissions ──
     if (url.includes('/problems/') && url.includes('/submit/')) {
       self.addEventListener('load', function () {
         try {
           const data = JSON.parse(self.responseText);
           if (data && data.submission_id) {
-            console.log('[LeetCode Pusher] ✦ Submission detected via XHR, ID:', data.submission_id);
+            console.log('[LeetSync] ✦ Real SUBMIT detected via XHR, ID:', data.submission_id);
+            pendingSubmissions.add(data.submission_id);
             window.postMessage({
               type: '__LC_PUSHER_SUBMISSION__',
               submissionId: data.submission_id,
@@ -92,16 +112,23 @@
       });
     }
 
+    // ── Only relay check results for REAL submissions ──
     if (url.includes('/submissions/detail/') && url.includes('/check/')) {
       self.addEventListener('load', function () {
         try {
           const data = JSON.parse(self.responseText);
           if (data && data.state === 'SUCCESS') {
-            console.log('[LeetCode Pusher] ✦ Submission result via XHR:', data.status_msg);
-            window.postMessage({
-              type: '__LC_PUSHER_RESULT__',
-              result: data,
-            }, '*');
+            const subId = data.submission_id;
+            if (subId && pendingSubmissions.has(subId)) {
+              console.log('[LeetSync] ✦ Real submission result via XHR:', data.status_msg);
+              pendingSubmissions.delete(subId);
+              window.postMessage({
+                type: '__LC_PUSHER_RESULT__',
+                result: data,
+              }, '*');
+            } else {
+              console.log('[LeetSync] ⊘ Ignoring Run Code result via XHR');
+            }
           }
         } catch (e) {}
       });
@@ -110,5 +137,5 @@
     return originalSend.apply(this, args);
   };
 
-  console.log('[LeetSync] Fetch & XHR interceptors active in MAIN world');
+  console.log('[LeetSync] Fetch & XHR interceptors active (Submit only — Run Code ignored)');
 })();

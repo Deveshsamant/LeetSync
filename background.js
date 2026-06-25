@@ -719,7 +719,111 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
+
+  // Return list of all synced problems
+  if (message.type === 'GET_PROBLEMS') {
+    chrome.storage.local.get(['solvedProblems'], (data) => {
+      const problems = data.solvedProblems || {};
+      const list = Object.entries(problems).map(([key, p]) => ({
+        number: p.number || parseInt(key, 10),
+        title: p.title,
+        difficulty: p.difficulty,
+        language: p.language,
+        folderName: p.folderName,
+        date: p.date,
+        solutionCount: p.solutionCount || 1,
+      }));
+      // Sort by number
+      list.sort((a, b) => a.number - b.number);
+      sendResponse({ success: true, problems: list });
+    });
+    return true;
+  }
+
+  // Delete a problem from GitHub and local storage
+  if (message.type === 'DELETE_PROBLEM') {
+    deleteProblemFromGitHub(message.problemNumber, message.folderName)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
+
+/**
+ * Delete a problem folder from GitHub and update local storage + README.
+ */
+async function deleteProblemFromGitHub(problemNumber, folderName) {
+  const settings = await chrome.storage.sync.get(['githubRepo']);
+  const repo = settings.githubRepo;
+
+  if (!repo) throw new Error('No repo configured.');
+
+  const folderPath = `problems/${folderName}`;
+
+  // Step 1: List all files in the problem folder
+  let files = [];
+  try {
+    files = await githubAPI(`/repos/${repo}/contents/${folderPath}`);
+  } catch (e) {
+    if (e.message.includes('404')) {
+      console.log(`[LeetSync] Folder ${folderPath} not found on GitHub, removing locally only`);
+    } else {
+      throw e;
+    }
+  }
+
+  // Step 2: Delete each file in the folder
+  if (Array.isArray(files)) {
+    for (const file of files) {
+      await githubAPI(`/repos/${repo}/contents/${file.path}`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          message: `Delete ${file.name} from ${problemNumber}. ${folderName}`,
+          sha: file.sha,
+        }),
+      });
+      console.log(`[LeetSync] Deleted: ${file.path}`);
+    }
+  }
+
+  // Step 3: Remove from local storage
+  const local = await chrome.storage.local.get(['solvedProblems', 'pushCount']);
+  const solvedProblems = local.solvedProblems || {};
+  const deletedProblem = solvedProblems[problemNumber];
+  const solCount = deletedProblem?.solutionCount || 1;
+
+  delete solvedProblems[problemNumber];
+
+  const newPushCount = Math.max(0, (local.pushCount || 0) - solCount);
+
+  await chrome.storage.local.set({
+    solvedProblems,
+    pushCount: newPushCount,
+  });
+
+  // Step 4: Regenerate root README (without the deleted problem)
+  const problems = Object.values(solvedProblems);
+  const readmeContent = generateRootReadme(problems);
+
+  const existingReadme = await getFile(repo, 'README.md');
+  if (existingReadme) {
+    await putFile(
+      repo,
+      'README.md',
+      readmeContent,
+      `Remove problem: ${problemNumber}. ${folderName.replace(/-/g, ' ').replace(/^\d+\s*/, '')}`,
+      existingReadme.sha
+    );
+  }
+
+  console.log(`[LeetSync] ✅ Problem ${problemNumber} deleted from GitHub and local storage`);
+
+  return {
+    success: true,
+    solvedCount: Object.keys(solvedProblems).length,
+    pushCount: newPushCount,
+  };
+}
 
 /**
  * Test the GitHub connection — fast, direct, no retries.
