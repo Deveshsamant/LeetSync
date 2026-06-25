@@ -301,83 +301,211 @@ function generateProblemReadme(problem) {
 /**
  * Build the root README — a stunning dashboard of all solved problems.
  */
-function generateRootReadme(problems) {
-  const sorted = [...problems].sort((a, b) => a.number - b.number);
-  const total = sorted.length;
-  const today = new Date().toISOString().split('T')[0];
+async function generateRootReadme(problems) {
+  const themeData = await chrome.storage.sync.get(['readmeTheme']);
+  const theme = themeData.readmeTheme || 'dark-pro';
+  return README_THEMES[theme]?.(problems) || README_THEMES['dark-pro'](problems);
+}
 
-  // Stats
-  const counts = { Easy: 0, Medium: 0, Hard: 0 };
-  const langCount = {};
-  sorted.forEach(p => {
-    if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
-    langCount[p.language] = (langCount[p.language] || 0) + 1;
-  });
-
-  const topLangs = Object.entries(langCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  // Shields.io badge URLs
-  const totalBadge   = `![Problems](https://img.shields.io/badge/Total%20Solved-${total}-6c5ce7?style=for-the-badge&labelColor=1a1a2e)`;
-  const easyBadge    = `![Easy](https://img.shields.io/badge/Easy-${counts.Easy}-00b8a3?style=for-the-badge&labelColor=1a1a2e)`;
-  const mediumBadge  = `![Medium](https://img.shields.io/badge/Medium-${counts.Medium}-ffa116?style=for-the-badge&labelColor=1a1a2e)`;
-  const hardBadge    = `![Hard](https://img.shields.io/badge/Hard-${counts.Hard}-ef4743?style=for-the-badge&labelColor=1a1a2e)`;
-  const updatedBadge = `![Updated](https://img.shields.io/badge/Last%20Updated-${encodeURIComponent(today)}-0984e3?style=flat-square&labelColor=1a1a2e)`;
-  const autoSyncBadge = `![Auto](https://img.shields.io/badge/Auto--Synced%20by-LeetSync-ffa116?style=flat-square&logo=google-chrome&logoColor=white)`;
-
-  let c = '';
-
-  // ── Banner ──
-  c += `<div align="center">\n\n`;
-  c += `<h1>⚡ LeetCode Solutions</h1>\n`;
-  c += `<p><em>Automatically synced with every accepted submission</em></p>\n\n`;
-  c += `${totalBadge} ${easyBadge} ${mediumBadge} ${hardBadge}\n\n`;
-  c += `${updatedBadge} ${autoSyncBadge}\n\n`;
-  c += `</div>\n\n`;
-  c += `---\n\n`;
-
-  // ── Progress Dashboard ──
-  c += `## 📊 Progress Dashboard\n\n`;
-  c += `\`\`\`\n`;
-  c += `  Total Solved   ${String(total).padStart(4)}  ${'█'.repeat(Math.min(total, 40))}\n`;
-  c += `\n`;
-  c += `  🟢 Easy       ${String(counts.Easy).padStart(4)}  ${progressBar(counts.Easy, total, 30)}\n`;
-  c += `  🟡 Medium     ${String(counts.Medium).padStart(4)}  ${progressBar(counts.Medium, total, 30)}\n`;
-  c += `  🔴 Hard       ${String(counts.Hard).padStart(4)}  ${progressBar(counts.Hard, total, 30)}\n`;
-  c += `\`\`\`\n\n`;
-
-  // ── Language Stats ──
-  if (topLangs.length > 0) {
-    c += `## 🛠️ Languages Used\n\n`;
-    c += `\`\`\`\n`;
-    topLangs.forEach(([lang, cnt]) => {
-      const bar = progressBar(cnt, total, 25);
-      c += `  ${lang.padEnd(14)} ${String(cnt).padStart(3)}  ${bar}\n`;
+// ── Theme: Dark Pro (original) ──
+const README_THEMES = {
+  'dark-pro': function(problems) {
+    const sorted = [...problems].sort((a, b) => a.number - b.number);
+    const total = sorted.length;
+    const today = new Date().toISOString().split('T')[0];
+    const counts = { Easy: 0, Medium: 0, Hard: 0 };
+    const langCount = {};
+    sorted.forEach(p => {
+      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
+      langCount[p.language] = (langCount[p.language] || 0) + 1;
     });
+    const topLangs = Object.entries(langCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const totalBadge   = `![Problems](https://img.shields.io/badge/Total%20Solved-${total}-6c5ce7?style=for-the-badge&labelColor=1a1a2e)`;
+    const easyBadge    = `![Easy](https://img.shields.io/badge/Easy-${counts.Easy}-00b8a3?style=for-the-badge&labelColor=1a1a2e)`;
+    const mediumBadge  = `![Medium](https://img.shields.io/badge/Medium-${counts.Medium}-ffa116?style=for-the-badge&labelColor=1a1a2e)`;
+    const hardBadge    = `![Hard](https://img.shields.io/badge/Hard-${counts.Hard}-ef4743?style=for-the-badge&labelColor=1a1a2e)`;
+    const updatedBadge = `![Updated](https://img.shields.io/badge/Last%20Updated-${encodeURIComponent(today)}-0984e3?style=flat-square&labelColor=1a1a2e)`;
+    const autoSyncBadge = `![Auto](https://img.shields.io/badge/Auto--Synced%20by-LeetSync-ffa116?style=flat-square&logo=google-chrome&logoColor=white)`;
+
+    let c = '';
+    c += `<div align="center">\n\n`;
+    c += `<h1>⚡ LeetCode Solutions</h1>\n`;
+    c += `<p><em>Automatically synced with every accepted submission</em></p>\n\n`;
+    c += `${totalBadge} ${easyBadge} ${mediumBadge} ${hardBadge}\n\n`;
+    c += `${updatedBadge} ${autoSyncBadge}\n\n`;
+    c += `</div>\n\n`;
+    c += `---\n\n`;
+
+    c += `## 📊 Progress Dashboard\n\n`;
+    c += `\`\`\`\n`;
+    c += `  Total Solved   ${String(total).padStart(4)}  ${'█'.repeat(Math.min(total, 40))}\n\n`;
+    c += `  🟢 Easy       ${String(counts.Easy).padStart(4)}  ${progressBar(counts.Easy, total, 30)}\n`;
+    c += `  🟡 Medium     ${String(counts.Medium).padStart(4)}  ${progressBar(counts.Medium, total, 30)}\n`;
+    c += `  🔴 Hard       ${String(counts.Hard).padStart(4)}  ${progressBar(counts.Hard, total, 30)}\n`;
     c += `\`\`\`\n\n`;
-  }
 
-  // ── Quick Stats Row ──
-  c += `## 🎯 Quick Stats\n\n`;
-  c += `| 📈 Stat | Value |\n`;
-  c += `|---------|-------|\n`;
-  c += `| Total Solved | **${total}** |\n`;
-  c += `| Easy | 🟢 ${counts.Easy} |\n`;
-  c += `| Medium | 🟡 ${counts.Medium} |\n`;
-  c += `| Hard | 🔴 ${counts.Hard} |\n`;
-  c += `| Languages | ${topLangs.map(([l]) => l).join(', ') || 'N/A'} |\n`;
-  c += `| Last Solved | ${sorted[sorted.length - 1]?.title || 'N/A'} |\n`;
-  c += `| Last Push | ${today} |\n\n`;
+    if (topLangs.length > 0) {
+      c += `## 🛠️ Languages Used\n\n`;
+      c += `\`\`\`\n`;
+      topLangs.forEach(([lang, cnt]) => {
+        c += `  ${lang.padEnd(14)} ${String(cnt).padStart(3)}  ${progressBar(cnt, total, 25)}\n`;
+      });
+      c += `\`\`\`\n\n`;
+    }
 
-  // ── Problems Table ──
-  c += `---\n\n`;
-  c += `## 📚 All Solutions\n\n`;
+    c += `## 🎯 Quick Stats\n\n`;
+    c += `| 📈 Stat | Value |\n|---------|-------|\n`;
+    c += `| Total Solved | **${total}** |\n`;
+    c += `| Easy | 🟢 ${counts.Easy} |\n| Medium | 🟡 ${counts.Medium} |\n| Hard | 🔴 ${counts.Hard} |\n`;
+    c += `| Languages | ${topLangs.map(([l]) => l).join(', ') || 'N/A'} |\n`;
+    c += `| Last Solved | ${sorted[sorted.length - 1]?.title || 'N/A'} |\n| Last Push | ${today} |\n\n`;
+    c += `---\n\n`;
+    c += buildProblemsTable(sorted, today);
+    c += buildFooter();
+    return c;
+  },
+
+  // ── Theme: Clean Light ──
+  'clean-light': function(problems) {
+    const sorted = [...problems].sort((a, b) => a.number - b.number);
+    const total = sorted.length;
+    const today = new Date().toISOString().split('T')[0];
+    const counts = { Easy: 0, Medium: 0, Hard: 0 };
+    sorted.forEach(p => { if (counts[p.difficulty] !== undefined) counts[p.difficulty]++; });
+
+    let c = '';
+    c += `# LeetCode Solutions\n\n`;
+    c += `> ${total} problems solved | Last updated: ${today}\n\n`;
+    c += `![Total](https://img.shields.io/badge/solved-${total}-blue?style=flat-square) `;
+    c += `![Easy](https://img.shields.io/badge/easy-${counts.Easy}-brightgreen?style=flat-square) `;
+    c += `![Medium](https://img.shields.io/badge/medium-${counts.Medium}-orange?style=flat-square) `;
+    c += `![Hard](https://img.shields.io/badge/hard-${counts.Hard}-red?style=flat-square)\n\n`;
+    c += `---\n\n`;
+    c += buildProblemsTable(sorted, today);
+    c += `\n---\n\n`;
+    c += `*Auto-synced by [LeetSync](https://github.com/Deveshsamant/LeetSync)*\n`;
+    return c;
+  },
+
+  // ── Theme: Colorful ──
+  'colorful': function(problems) {
+    const sorted = [...problems].sort((a, b) => a.number - b.number);
+    const total = sorted.length;
+    const today = new Date().toISOString().split('T')[0];
+    const counts = { Easy: 0, Medium: 0, Hard: 0 };
+    const langCount = {};
+    sorted.forEach(p => {
+      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
+      langCount[p.language] = (langCount[p.language] || 0) + 1;
+    });
+
+    let c = '';
+    c += `<div align="center">\n\n`;
+    c += `# 🌈 My LeetCode Journey 🚀\n\n`;
+    c += `### ✨ ${total} Problems Conquered! ✨\n\n`;
+    c += `![](https://img.shields.io/badge/🟢_Easy-${counts.Easy}-00b894?style=for-the-badge) `;
+    c += `![](https://img.shields.io/badge/🟡_Medium-${counts.Medium}-fdcb6e?style=for-the-badge) `;
+    c += `![](https://img.shields.io/badge/🔴_Hard-${counts.Hard}-e17055?style=for-the-badge)\n\n`;
+    c += `</div>\n\n`;
+
+    c += `## 🎮 Progress\n\n`;
+    c += `| 🏆 Milestone | Status |\n|---|---|\n`;
+    c += `| First 10 | ${total >= 10 ? '✅ Done!' : `⏳ ${total}/10`} |\n`;
+    c += `| First 25 | ${total >= 25 ? '✅ Done!' : `⏳ ${total}/25`} |\n`;
+    c += `| First 50 | ${total >= 50 ? '✅ Done!' : `⏳ ${total}/50`} |\n`;
+    c += `| First 100 | ${total >= 100 ? '✅ Done!' : `⏳ ${total}/100`} |\n`;
+    c += `| First 200 | ${total >= 200 ? '✅ Done!' : `⏳ ${total}/200`} |\n\n`;
+
+    c += `## 💻 Languages\n\n`;
+    Object.entries(langCount).sort((a, b) => b[1] - a[1]).forEach(([lang, cnt]) => {
+      const pct = Math.round((cnt / total) * 100);
+      c += `- **${lang}**: ${cnt} solutions (${pct}%) ${'🟩'.repeat(Math.ceil(pct / 10))}\n`;
+    });
+    c += `\n`;
+
+    c += `---\n\n`;
+    c += buildProblemsTable(sorted, today);
+    c += buildFooter();
+    return c;
+  },
+
+  // ── Theme: Minimal ──
+  'minimal': function(problems) {
+    const sorted = [...problems].sort((a, b) => a.number - b.number);
+    const today = new Date().toISOString().split('T')[0];
+
+    let c = `# LeetCode\n\n`;
+    c += `${sorted.length} solutions. Updated ${today}.\n\n`;
+    c += buildProblemsTable(sorted, today);
+    c += `\n---\n*Synced by LeetSync*\n`;
+    return c;
+  },
+
+  // ── Theme: Stats Heavy ──
+  'stats-heavy': function(problems) {
+    const sorted = [...problems].sort((a, b) => a.number - b.number);
+    const total = sorted.length;
+    const today = new Date().toISOString().split('T')[0];
+    const counts = { Easy: 0, Medium: 0, Hard: 0 };
+    const langCount = {};
+    const monthCount = {};
+    sorted.forEach(p => {
+      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
+      langCount[p.language] = (langCount[p.language] || 0) + 1;
+      const month = p.date?.substring(0, 7) || 'unknown';
+      monthCount[month] = (monthCount[month] || 0) + 1;
+    });
+    const topLangs = Object.entries(langCount).sort((a, b) => b[1] - a[1]);
+
+    let c = '';
+    c += `<div align="center">\n\n`;
+    c += `# 📊 LeetCode Analytics\n\n`;
+    c += `![](https://img.shields.io/badge/Total-${total}-blueviolet?style=for-the-badge) `;
+    c += `![](https://img.shields.io/badge/Easy-${counts.Easy}-success?style=for-the-badge) `;
+    c += `![](https://img.shields.io/badge/Medium-${counts.Medium}-warning?style=for-the-badge) `;
+    c += `![](https://img.shields.io/badge/Hard-${counts.Hard}-critical?style=for-the-badge)\n\n`;
+    c += `</div>\n\n`;
+
+    c += `## 📈 Detailed Statistics\n\n`;
+    c += `\`\`\`\n`;
+    c += ` ┌──────────────────────────────────────────┐\n`;
+    c += ` │  DIFFICULTY DISTRIBUTION                  │\n`;
+    c += ` ├──────────────────────────────────────────┤\n`;
+    c += ` │  🟢 Easy    ${String(counts.Easy).padStart(3)}  ${progressBar(counts.Easy, total, 25)}  ${Math.round(counts.Easy/total*100)}% │\n`;
+    c += ` │  🟡 Medium  ${String(counts.Medium).padStart(3)}  ${progressBar(counts.Medium, total, 25)}  ${Math.round(counts.Medium/total*100)}% │\n`;
+    c += ` │  🔴 Hard    ${String(counts.Hard).padStart(3)}  ${progressBar(counts.Hard, total, 25)}  ${Math.round(counts.Hard/total*100)}% │\n`;
+    c += ` └──────────────────────────────────────────┘\n`;
+    c += `\`\`\`\n\n`;
+
+    c += `## 💻 Language Breakdown\n\n`;
+    c += `| Language | Count | % | Bar |\n|----------|:-----:|:-:|-----|\n`;
+    topLangs.forEach(([lang, cnt]) => {
+      const pct = Math.round((cnt / total) * 100);
+      c += `| ${lang} | ${cnt} | ${pct}% | ${'█'.repeat(Math.ceil(pct / 5))} |\n`;
+    });
+    c += `\n`;
+
+    c += `## 📅 Monthly Activity\n\n`;
+    c += `| Month | Solved |\n|-------|:------:|\n`;
+    Object.entries(monthCount).sort().reverse().slice(0, 6).forEach(([month, cnt]) => {
+      c += `| ${month} | ${cnt} ${'🟩'.repeat(Math.min(cnt, 10))} |\n`;
+    });
+    c += `\n`;
+
+    c += `---\n\n`;
+    c += buildProblemsTable(sorted, today);
+    c += buildFooter();
+    return c;
+  },
+};
+
+// ── Shared helpers for themes ──
+function buildProblemsTable(sorted, today) {
+  let c = `## 📚 All Solutions\n\n`;
   c += `| # | Problem | Difficulty | Language | Date |\n`;
   c += `|:---:|---------|:----------:|:--------:|:----:|\n`;
-
   sorted.forEach(p => {
-    // Ensure number exists (fallback: parse from folderName like '0169-Majority-Element')
     const num = p.number || parseInt(p.folderName?.match(/^(\d+)/)?.[1], 10) || '?';
     const folder = p.folderName || buildFolderName(num, p.title);
     const link = `[${p.title}](problems/${folder})`;
@@ -386,15 +514,16 @@ function generateRootReadme(problems) {
     const date = p.date || today;
     c += `| ${num} | ${link} | ${diff} | \`${p.language}\` | ${date} |\n`;
   });
+  c += `\n`;
+  return c;
+}
 
-  c += `\n---\n\n`;
-
-  // ── Footer ──
+function buildFooter() {
+  let c = `---\n\n`;
   c += `<div align="center">\n\n`;
   c += `<sub>🤖 Auto-synced by <strong>LeetSync</strong> Chrome Extension</sub>\n\n`;
   c += `<sub>Built with ❤️ by <a href="https://deveshsamant.in/">Devesh Samant</a></sub>\n\n`;
   c += `</div>\n`;
-
   return c;
 }
 
@@ -589,6 +718,10 @@ async function pushToGitHub(problemData) {
     solvedProblems,
   });
 
+  // Update streak and check achievements
+  await updateStreak();
+  await checkAchievements();
+
   return {
     success: true,
     solutionNumber: nextSolNum,
@@ -653,7 +786,7 @@ async function updateRootReadme(repo, newProblem) {
 
   // Step 5: Generate and push the new README
   const problems = Object.values(mergedProblems);
-  const readmeContent = generateRootReadme(problems);
+  const readmeContent = await generateRootReadme(problems);
 
   await putFile(
     repo,
@@ -672,11 +805,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PUSH_TO_GITHUB') {
     pushToGitHub(message.data)
       .then((result) => {
+        // On success, also try processing any queued items
+        processOfflineQueue().catch(() => {});
         sendResponse(result);
       })
-      .catch((error) => {
-        console.error('[LeetCode Pusher] Push failed:', error);
-        sendResponse({ success: false, error: error.message });
+      .catch(async (error) => {
+        console.error('[LeetSync] Push failed:', error);
+        // Check if it's a network error — queue for later
+        const isNetworkError = error.message.includes('Failed to fetch') ||
+                               error.message.includes('NetworkError') ||
+                               error.message.includes('network') ||
+                               error.message.includes('timeout') ||
+                               error.message.includes('aborted');
+        if (isNetworkError) {
+          await addToOfflineQueue(message.data);
+          sendResponse({
+            success: false,
+            queued: true,
+            error: '📡 No connection — queued for later! Will auto-push when online.',
+          });
+        } else {
+          sendResponse({ success: false, error: error.message });
+        }
       });
 
     // Return true to indicate we'll send an async response
@@ -747,6 +897,75 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
+
+  // Get solution files for a specific problem
+  if (message.type === 'GET_SOLUTIONS') {
+    getSolutionFiles(message.folderName)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  // Delete a single solution and renumber remaining
+  if (message.type === 'DELETE_SOLUTION') {
+    deleteSingleSolution(message.problemNumber, message.folderName, message.fileName)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  // Get streak data
+  if (message.type === 'GET_STREAK') {
+    chrome.storage.local.get(['streakData'], (data) => {
+      sendResponse(data.streakData || { currentStreak: 0, longestStreak: 0, lastSolveDate: null, solveHistory: [] });
+    });
+    return true;
+  }
+
+  // Get achievements
+  if (message.type === 'GET_ACHIEVEMENTS') {
+    chrome.storage.local.get(['achievements', 'solvedProblems', 'streakData'], (data) => {
+      sendResponse({
+        unlocked: data.achievements || {},
+        solvedProblems: data.solvedProblems || {},
+        streakData: data.streakData || { currentStreak: 0, longestStreak: 0 },
+      });
+    });
+    return true;
+  }
+
+  // Get offline queue status
+  if (message.type === 'GET_QUEUE_STATUS') {
+    chrome.storage.local.get(['offlineQueue'], (data) => {
+      const queue = data.offlineQueue || [];
+      sendResponse({ queueLength: queue.length, items: queue.map(q => ({ title: q.title, number: q.number, timestamp: q.timestamp })) });
+    });
+    return true;
+  }
+
+  // Create a new GitHub repo
+  if (message.type === 'CREATE_REPO') {
+    createGitHubRepo(message.repoName, message.isPrivate)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  // Get selected theme
+  if (message.type === 'GET_THEME') {
+    chrome.storage.sync.get(['readmeTheme'], (data) => {
+      sendResponse({ theme: data.readmeTheme || 'dark-pro' });
+    });
+    return true;
+  }
+
+  // Set theme
+  if (message.type === 'SET_THEME') {
+    chrome.storage.sync.set({ readmeTheme: message.theme }, () => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
 });
 
 /**
@@ -803,7 +1022,7 @@ async function deleteProblemFromGitHub(problemNumber, folderName) {
 
   // Step 4: Regenerate root README (without the deleted problem)
   const problems = Object.values(solvedProblems);
-  const readmeContent = generateRootReadme(problems);
+  const readmeContent = await generateRootReadme(problems);
 
   const existingReadme = await getFile(repo, 'README.md');
   if (existingReadme) {
@@ -823,6 +1042,132 @@ async function deleteProblemFromGitHub(problemNumber, folderName) {
     solvedCount: Object.keys(solvedProblems).length,
     pushCount: newPushCount,
   };
+}
+
+/**
+ * Get solution files for a specific problem folder.
+ */
+async function getSolutionFiles(folderName) {
+  const settings = await chrome.storage.sync.get(['githubRepo']);
+  const repo = settings.githubRepo;
+  if (!repo) return { success: true, solutions: [] };
+
+  const folderPath = `problems/${folderName}`;
+  try {
+    const files = await githubAPI(`/repos/${repo}/contents/${folderPath}`);
+    if (!Array.isArray(files)) return { success: true, solutions: [] };
+
+    const solutions = files
+      .filter(f => f.name.match(/^sol\d+\./))
+      .map(f => ({
+        name: f.name,
+        path: f.path,
+        sha: f.sha,
+        num: parseInt(f.name.replace(/^sol(\d+).*/, '$1')),
+      }))
+      .sort((a, b) => a.num - b.num);
+
+    return { success: true, solutions };
+  } catch (e) {
+    return { success: true, solutions: [] };
+  }
+}
+
+/**
+ * Delete a single solution file and renumber remaining solutions.
+ * e.g., delete sol2.java → sol3.java becomes sol2.java, sol4.java becomes sol3.java
+ */
+async function deleteSingleSolution(problemNumber, folderName, fileName) {
+  const settings = await chrome.storage.sync.get(['githubRepo']);
+  const repo = settings.githubRepo;
+  if (!repo) throw new Error('No repo configured.');
+
+  const folderPath = `problems/${folderName}`;
+
+  // Step 1: Get all files in the folder
+  const files = await githubAPI(`/repos/${repo}/contents/${folderPath}`);
+  if (!Array.isArray(files)) throw new Error('Folder not found on GitHub');
+
+  // Step 2: Delete the target solution file
+  const targetFile = files.find(f => f.name === fileName);
+  if (!targetFile) throw new Error(`File ${fileName} not found`);
+
+  await githubAPI(`/repos/${repo}/contents/${targetFile.path}`, {
+    method: 'DELETE',
+    body: JSON.stringify({
+      message: `Delete ${fileName} from ${problemNumber}. ${folderName}`,
+      sha: targetFile.sha,
+    }),
+  });
+  console.log(`[LeetSync] Deleted solution: ${targetFile.path}`);
+
+  // Step 3: Get the deleted solution's number and extension
+  const deletedNum = parseInt(fileName.replace(/^sol(\d+).*/, '$1'));
+  const allSolFiles = files
+    .filter(f => f.name.match(/^sol\d+\./))
+    .map(f => ({
+      name: f.name,
+      path: f.path,
+      sha: f.sha,
+      num: parseInt(f.name.replace(/^sol(\d+).*/, '$1')),
+      ext: f.name.replace(/^sol\d+/, ''),
+    }))
+    .sort((a, b) => a.num - b.num);
+
+  // Step 4: Renumber solutions above the deleted one
+  const toRename = allSolFiles.filter(f => f.num > deletedNum);
+  for (const file of toRename) {
+    // Fetch file content
+    const fileData = await githubAPI(`/repos/${repo}/contents/${file.path}`);
+    const content = fileData.content; // base64 encoded
+
+    const newNum = file.num - 1;
+    const newName = `sol${newNum}${file.ext}`;
+    const newPath = `${folderPath}/${newName}`;
+
+    // Delete old file
+    await githubAPI(`/repos/${repo}/contents/${file.path}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        message: `Renumber: ${file.name} → ${newName}`,
+        sha: fileData.sha,
+      }),
+    });
+
+    // Create new file with new name
+    await githubAPI(`/repos/${repo}/contents/${newPath}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: `Renumber: ${file.name} → ${newName}`,
+        content: content,
+      }),
+    });
+
+    console.log(`[LeetSync] Renamed: ${file.name} → ${newName}`);
+  }
+
+  // Step 5: Update local storage (decrease solutionCount)
+  const local = await chrome.storage.local.get(['solvedProblems', 'pushCount']);
+  const solvedProblems = local.solvedProblems || {};
+  const problem = solvedProblems[problemNumber];
+
+  if (problem) {
+    const oldCount = problem.solutionCount || 1;
+    const newCount = oldCount - 1;
+
+    if (newCount <= 0) {
+      // No more solutions → delete the whole problem
+      return deleteProblemFromGitHub(problemNumber, folderName);
+    }
+
+    problem.solutionCount = newCount;
+    solvedProblems[problemNumber] = problem;
+    const newPushCount = Math.max(0, (local.pushCount || 0) - 1);
+    await chrome.storage.local.set({ solvedProblems, pushCount: newPushCount });
+  }
+
+  console.log(`[LeetSync] ✅ Solution ${fileName} deleted and renumbered`);
+  return { success: true, remaining: (problem?.solutionCount || 1) - 1 };
 }
 
 /**
@@ -1005,7 +1350,219 @@ async function reinjectIntoLeetCodeTabs() {
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(`[LeetSync] Extension ${details.reason}. Re-injecting into open tabs...`);
   reinjectIntoLeetCodeTabs();
+
+  // Set up alarms for periodic tasks
+  chrome.alarms.create('processQueue', { periodInMinutes: 5 });
+  chrome.alarms.create('streakReminder', { periodInMinutes: 60 });
 });
 
-// Also re-inject when the service worker starts (covers manual reload via chrome://extensions)
+// Also re-inject when the service worker starts
 reinjectIntoLeetCodeTabs();
+
+// ── Alarm Handler ────────────────────────────────────────────
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'processQueue') {
+    processOfflineQueue().catch(e => console.warn('[LeetSync] Queue processing failed:', e));
+  }
+  if (alarm.name === 'streakReminder') {
+    checkStreakReminder();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// ── Offline Queue System ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+async function addToOfflineQueue(problemData) {
+  const data = await chrome.storage.local.get(['offlineQueue']);
+  const queue = data.offlineQueue || [];
+  queue.push({ ...problemData, queuedAt: new Date().toISOString() });
+  await chrome.storage.local.set({ offlineQueue: queue });
+  console.log(`[LeetSync] 📡 Queued problem for later: ${problemData.title} (Queue size: ${queue.length})`);
+}
+
+async function processOfflineQueue() {
+  const data = await chrome.storage.local.get(['offlineQueue']);
+  const queue = data.offlineQueue || [];
+  if (queue.length === 0) return;
+
+  console.log(`[LeetSync] 📡 Processing offline queue (${queue.length} items)...`);
+  const remaining = [];
+
+  for (const item of queue) {
+    try {
+      await pushToGitHub(item);
+      console.log(`[LeetSync] ✅ Queued push succeeded: ${item.title}`);
+    } catch (e) {
+      console.warn(`[LeetSync] ⚠️ Queued push still failing: ${item.title}`, e.message);
+      remaining.push(item);
+    }
+  }
+
+  await chrome.storage.local.set({ offlineQueue: remaining });
+  if (remaining.length === 0) {
+    console.log('[LeetSync] 📡 Offline queue cleared!');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Streak Tracking System ───────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+async function updateStreak() {
+  const data = await chrome.storage.local.get(['streakData']);
+  const streak = data.streakData || {
+    currentStreak: 0,
+    longestStreak: 0,
+    lastSolveDate: null,
+    solveHistory: [],
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // Already solved today
+  if (streak.lastSolveDate === today) {
+    return streak;
+  }
+
+  // Check if yesterday was the last solve (continue streak)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  if (streak.lastSolveDate === yesterday) {
+    streak.currentStreak++;
+  } else if (streak.lastSolveDate !== today) {
+    // Streak broken — start from 1
+    streak.currentStreak = 1;
+  }
+
+  streak.lastSolveDate = today;
+  streak.longestStreak = Math.max(streak.longestStreak, streak.currentStreak);
+
+  // Add to solve history (keep last 365 days)
+  if (!streak.solveHistory.includes(today)) {
+    streak.solveHistory.push(today);
+    if (streak.solveHistory.length > 365) {
+      streak.solveHistory = streak.solveHistory.slice(-365);
+    }
+  }
+
+  await chrome.storage.local.set({ streakData: streak });
+  console.log(`[LeetSync] 🔥 Streak: ${streak.currentStreak} days (Best: ${streak.longestStreak})`);
+  return streak;
+}
+
+async function checkStreakReminder() {
+  const data = await chrome.storage.local.get(['streakData']);
+  const streak = data.streakData;
+  if (!streak || streak.currentStreak < 2) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  if (streak.lastSolveDate === today) return; // Already solved today
+
+  const hour = new Date().getHours();
+  // Only remind in the evening (6 PM - 11 PM)
+  if (hour >= 18 && hour <= 23) {
+    chrome.notifications.create('streakReminder', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: `🔥 Don't break your ${streak.currentStreak}-day streak!`,
+      message: `You haven't solved any LeetCode problem today. Keep the fire going!`,
+      priority: 1,
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Achievement System ───────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+const ACHIEVEMENT_DEFS = [
+  { id: 'first_blood', emoji: '🩸', name: 'First Blood', desc: 'Solve your 1st problem', check: (ctx) => ctx.totalSolved >= 1 },
+  { id: 'on_fire', emoji: '🔥', name: 'On Fire', desc: '3-day solving streak', check: (ctx) => ctx.streak >= 3 },
+  { id: 'unstoppable', emoji: '⚡', name: 'Unstoppable', desc: '7-day solving streak', check: (ctx) => ctx.streak >= 7 },
+  { id: 'month_king', emoji: '👑', name: 'Month King', desc: '30-day solving streak', check: (ctx) => ctx.streak >= 30 },
+  { id: 'deca', emoji: '🎯', name: 'Deca', desc: 'Solve 10 problems', check: (ctx) => ctx.totalSolved >= 10 },
+  { id: 'quarter', emoji: '🏅', name: 'Quarter Century', desc: 'Solve 25 problems', check: (ctx) => ctx.totalSolved >= 25 },
+  { id: 'half_century', emoji: '🥇', name: 'Half Century', desc: 'Solve 50 problems', check: (ctx) => ctx.totalSolved >= 50 },
+  { id: 'century', emoji: '💯', name: 'Century', desc: 'Solve 100 problems', check: (ctx) => ctx.totalSolved >= 100 },
+  { id: 'easy_rider', emoji: '🟢', name: 'Easy Rider', desc: 'Solve 10 Easy problems', check: (ctx) => ctx.easySolved >= 10 },
+  { id: 'medium_rare', emoji: '🟡', name: 'Medium Rare', desc: 'Solve 10 Medium problems', check: (ctx) => ctx.mediumSolved >= 10 },
+  { id: 'hard_core', emoji: '🔴', name: 'Hard Core', desc: 'Solve 5 Hard problems', check: (ctx) => ctx.hardSolved >= 5 },
+  { id: 'polyglot', emoji: '🌐', name: 'Polyglot', desc: 'Use 3+ languages', check: (ctx) => ctx.languages >= 3 },
+  { id: 'night_owl', emoji: '🌙', name: 'Night Owl', desc: 'Solve after midnight', check: (ctx) => ctx.hour >= 0 && ctx.hour < 5 },
+  { id: 'early_bird', emoji: '☀️', name: 'Early Bird', desc: 'Solve before 7 AM', check: (ctx) => ctx.hour >= 5 && ctx.hour < 7 },
+  { id: 'bookworm', emoji: '📚', name: 'Bookworm', desc: 'Solve 5 in one day', check: (ctx) => ctx.todaySolved >= 5 },
+];
+
+async function checkAchievements() {
+  const data = await chrome.storage.local.get(['achievements', 'solvedProblems', 'streakData']);
+  const unlocked = data.achievements || {};
+  const solved = data.solvedProblems || {};
+  const streak = data.streakData || { currentStreak: 0, longestStreak: 0, solveHistory: [] };
+
+  const problems = Object.values(solved);
+  const today = new Date().toISOString().split('T')[0];
+  const hour = new Date().getHours();
+
+  // Build context
+  const ctx = {
+    totalSolved: problems.length,
+    easySolved: problems.filter(p => p.difficulty === 'Easy').length,
+    mediumSolved: problems.filter(p => p.difficulty === 'Medium').length,
+    hardSolved: problems.filter(p => p.difficulty === 'Hard').length,
+    languages: new Set(problems.map(p => p.language)).size,
+    streak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    hour: hour,
+    todaySolved: problems.filter(p => p.date === today).length,
+  };
+
+  const newlyUnlocked = [];
+
+  for (const def of ACHIEVEMENT_DEFS) {
+    if (unlocked[def.id]) continue; // Already unlocked
+    if (def.check(ctx)) {
+      unlocked[def.id] = { unlockedAt: new Date().toISOString() };
+      newlyUnlocked.push(def);
+      console.log(`[LeetSync] 🏆 Achievement unlocked: ${def.emoji} ${def.name}`);
+    }
+  }
+
+  await chrome.storage.local.set({ achievements: unlocked });
+
+  // Notify for new achievements
+  for (const ach of newlyUnlocked) {
+    chrome.notifications.create(`achievement_${ach.id}`, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: `🏆 Achievement Unlocked!`,
+      message: `${ach.emoji} ${ach.name} — ${ach.desc}`,
+      priority: 2,
+    });
+  }
+
+  return newlyUnlocked;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Repo Creation ────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+async function createGitHubRepo(repoName, isPrivate = false) {
+  const response = await githubAPI('/user/repos', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: repoName,
+      description: '⚡ My LeetCode solutions — auto-synced by LeetSync Chrome Extension',
+      private: isPrivate,
+      auto_init: true,
+    }),
+  });
+
+  return {
+    success: true,
+    fullName: response.full_name,
+    url: response.html_url,
+    private: response.private,
+  };
+}

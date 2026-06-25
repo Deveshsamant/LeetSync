@@ -8,30 +8,97 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="popup-container">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ONBOARDING WIZARD (shown on first use)                 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="wizardOverlay" class="wizard-overlay" style="display:none;">
+    <div class="wizard-container">
+      <!-- Progress Dots -->
+      <div class="wizard-progress">
+        <span class="wizard-dot active" data-step="1"></span>
+        <span class="wizard-dot" data-step="2"></span>
+        <span class="wizard-dot" data-step="3"></span>
+        <span class="wizard-dot" data-step="4"></span>
+      </div>
+
+      <!-- Step 1: Welcome -->
+      <div class="wizard-step active" id="wizStep1">
+        <div class="wizard-icon">
+          <img src="icons/icon128.png" alt="LeetSync" width="64" height="64">
+        </div>
+        <h2>Welcome to LeetSync!</h2>
+        <p class="wizard-desc">Automatically push your accepted LeetCode solutions to GitHub — hands-free.</p>
+        <button class="btn btn-primary wizard-btn" id="wizStart">Get Started →</button>
+      </div>
+
+      <!-- Step 2: Token -->
+      <div class="wizard-step" id="wizStep2">
+        <h2>🔑 GitHub Token</h2>
+        <p class="wizard-desc">Create a Personal Access Token with <strong>repo</strong> scope.</p>
+        <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link">
+          Create token on GitHub →
+        </a>
+        <div class="form-group" style="margin-top:12px;">
+          <input type="password" id="wizToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="wizard-nav">
+          <button class="btn btn-secondary" id="wizBack2">← Back</button>
+          <button class="btn btn-primary" id="wizNext2">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Repository -->
+      <div class="wizard-step" id="wizStep3">
+        <h2>📂 Repository</h2>
+        <p class="wizard-desc">Choose where to save your solutions.</p>
+        <div class="wizard-repo-options">
+          <label class="wizard-radio active" id="radioExisting">
+            <input type="radio" name="repoChoice" value="existing" checked>
+            <span>Use existing repo</span>
+          </label>
+          <label class="wizard-radio" id="radioCreate">
+            <input type="radio" name="repoChoice" value="create">
+            <span>Create new repo</span>
+          </label>
+        </div>
+        <div id="existingRepoGroup" class="form-group" style="margin-top:10px;">
+          <input type="text" id="wizRepo" placeholder="username/leetcode-solutions" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="createRepoGroup" class="form-group" style="margin-top:10px;display:none;">
+          <input type="text" id="wizNewRepoName" placeholder="leetcode-solutions" autocomplete="off" spellcheck="false" />
+          <label class="wizard-checkbox" style="margin-top:8px;">
+            <input type="checkbox" id="wizRepoPrivate">
+            <span>Make it private 🔒</span>
+          </label>
+        </div>
+        <div class="wizard-nav">
+          <button class="btn btn-secondary" id="wizBack3">← Back</button>
+          <button class="btn btn-primary" id="wizNext3">Finish Setup ✨</button>
+        </div>
+        <div id="wizError" class="status-message status-error" style="display:none;margin-top:10px;"></div>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div class="wizard-step" id="wizStep4">
+        <div class="wizard-success-icon">🎉</div>
+        <h2>You're All Set!</h2>
+        <p class="wizard-desc">LeetSync is now active. Start solving and your code will appear on GitHub automatically!</p>
+        <div id="wizRepoLink" style="margin:12px 0;"></div>
+        <button class="btn btn-primary wizard-btn" id="wizDone">Open Dashboard →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MAIN POPUP (shown after setup)                         -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="mainPopup" class="popup-container">
     <!-- Header -->
     <div class="popup-header">
       <div class="logo-row">
         <div class="logo-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#grad1)" />
-            <path d="M2 17L12 22L22 17" stroke="url(#grad2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M2 12L12 17L22 12" stroke="url(#grad3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <defs>
-              <linearGradient id="grad1" x1="2" y1="2" x2="22" y2="12">
-                <stop stop-color="#ffa116" />
-                <stop offset="1" stop-color="#ff6b35" />
-              </linearGradient>
-              <linearGradient id="grad2" x1="2" y1="17" x2="22" y2="22">
-                <stop stop-color="#ffa116" />
-                <stop offset="1" stop-color="#ff6b35" />
-              </linearGradient>
-              <linearGradient id="grad3" x1="2" y1="12" x2="22" y2="17">
-                <stop stop-color="#ffa116" />
-                <stop offset="1" stop-color="#ff6b35" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <img src="icons/icon48.png" alt="LeetSync" width="28" height="28" style="border-radius:6px;">
         </div>
         <div class="logo-text">
           <h1>LeetSync</h1>
@@ -44,105 +111,232 @@
       </div>
     </div>
 
-    <!-- Settings Form -->
-    <div class="popup-body">
-      <div class="form-group">
-        <label for="githubToken">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0110 0v4"/>
-          </svg>
-          GitHub Personal Access Token
-        </label>
-        <div class="input-wrapper">
-          <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
-          <button type="button" id="toggleToken" class="toggle-btn" title="Show/Hide token">
-            <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="dashboard">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="tab-btn" data-tab="problems">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        Problems
+      </button>
+      <button class="tab-btn" data-tab="settings">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Settings
+      </button>
+    </div>
+
+    <!-- ══════════════ DASHBOARD TAB ══════════════ -->
+    <div class="tab-content active" id="tabDashboard">
+      <!-- Streak Banner -->
+      <div class="streak-banner" id="streakBanner">
+        <span class="streak-fire">🔥</span>
+        <div class="streak-info">
+          <span class="streak-count" id="streakCount">0</span>
+          <span class="streak-label">day streak</span>
+        </div>
+        <div class="streak-best">
+          Best: <strong id="streakBest">0</strong>
+        </div>
+      </div>
+
+      <!-- Animated Stats -->
+      <div class="popup-stats">
+        <div class="stat-item">
+          <div class="stat-value" id="statPushCount" data-target="0">0</div>
+          <div class="stat-label">Pushes</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value" id="statSolvedCount" data-target="0">0</div>
+          <div class="stat-label">Problems</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value" id="statLastPush">—</div>
+          <div class="stat-label">Last Push</div>
+        </div>
+      </div>
+
+      <!-- Difficulty Breakdown -->
+      <div class="difficulty-section">
+        <div class="section-title">Difficulty Breakdown</div>
+        <div class="difficulty-bar-container">
+          <div class="difficulty-bar">
+            <div class="diff-segment diff-easy" id="diffEasyBar" style="width:0%"></div>
+            <div class="diff-segment diff-medium" id="diffMedBar" style="width:0%"></div>
+            <div class="diff-segment diff-hard" id="diffHardBar" style="width:0%"></div>
+          </div>
+          <div class="difficulty-legend">
+            <span class="diff-label"><span class="dot dot-easy"></span>Easy <strong id="diffEasyNum">0</strong></span>
+            <span class="diff-label"><span class="dot dot-medium"></span>Medium <strong id="diffMedNum">0</strong></span>
+            <span class="diff-label"><span class="dot dot-hard"></span>Hard <strong id="diffHardNum">0</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Heatmap -->
+      <div class="heatmap-section">
+        <div class="section-title">Activity (Last 90 Days)</div>
+        <div class="heatmap-grid" id="heatmapGrid"></div>
+        <div class="heatmap-legend">
+          <span>Less</span>
+          <span class="heatmap-cell level-0"></span>
+          <span class="heatmap-cell level-1"></span>
+          <span class="heatmap-cell level-2"></span>
+          <span class="heatmap-cell level-3"></span>
+          <span>More</span>
+        </div>
+      </div>
+
+      <!-- Achievements -->
+      <div class="achievements-section">
+        <div class="section-title">🏆 Achievements</div>
+        <div class="badge-grid" id="badgeGrid"></div>
+      </div>
+
+      <!-- Offline Queue -->
+      <div class="queue-banner" id="queueBanner" style="display:none;">
+        <span>📡</span>
+        <span id="queueText">0 items queued</span>
+      </div>
+    </div>
+
+    <!-- ══════════════ PROBLEMS TAB ══════════════ -->
+    <div class="tab-content" id="tabProblems">
+      <div class="problems-list" id="problemsList">
+        <div class="problems-empty">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SETTINGS TAB ══════════════ -->
+    <div class="tab-content" id="tabSettings">
+      <div class="popup-body">
+        <div class="form-group">
+          <label for="githubToken">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
             </svg>
+            GitHub Personal Access Token
+          </label>
+          <div class="input-wrapper">
+            <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+            <button type="button" id="toggleToken" class="toggle-btn" title="Show/Hide token">
+              <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <span class="form-hint">
+            <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" id="createTokenLink">🔑 Get your token here →</a>
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="githubRepo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            </svg>
+            Repository
+          </label>
+          <input type="text" id="githubRepo" placeholder="username/leetcode-solutions" autocomplete="off" spellcheck="false" />
+          <span class="form-hint">Format: owner/repo-name</span>
+        </div>
+
+        <!-- README Theme Dropdown -->
+        <div class="form-group">
+          <label>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/>
+            </svg>
+            README Theme (GitHub)
+          </label>
+          <select id="readmeTheme" class="form-select">
+            <option value="dark-pro">🌑 Dark Pro — Badges, progress bars, full stats</option>
+            <option value="clean-light">☀️ Clean Light — Minimal badges, clean table</option>
+            <option value="colorful">🎨 Colorful — Rainbow vibes, milestones, emojis</option>
+            <option value="minimal">🔥 Minimal — Just the table, nothing extra</option>
+            <option value="stats-heavy">📊 Stats Heavy — ASCII charts, monthly activity</option>
+          </select>
+        </div>
+
+        <!-- Extension UI Theme -->
+        <div class="form-group">
+          <label>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+            </svg>
+            Extension Theme
+          </label>
+          <div class="ui-theme-grid" id="uiThemeGrid">
+            <div class="ui-theme-card active" data-ui-theme="dark-pro">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#0d1117,#161b22)">
+                <span class="ui-theme-accent" style="background:#ffa116"></span>
+              </div>
+              <span class="ui-theme-name">Dark Pro</span>
+              <span class="ui-theme-desc">Clean & professional</span>
+            </div>
+            <div class="ui-theme-card" data-ui-theme="glassmorphic">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#667eea,#764ba2)">
+                <span class="ui-theme-accent" style="background:rgba(255,255,255,0.25);backdrop-filter:blur(4px)"></span>
+              </div>
+              <span class="ui-theme-name">Glass</span>
+              <span class="ui-theme-desc">Frosted transparency</span>
+            </div>
+            <div class="ui-theme-card" data-ui-theme="gaming-arcade">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#0a0a0a,#1a0a2e)">
+                <span class="ui-theme-accent" style="background:#00ff41"></span>
+              </div>
+              <span class="ui-theme-name">Arcade</span>
+              <span class="ui-theme-desc">Neon retro gaming</span>
+            </div>
+            <div class="ui-theme-card" data-ui-theme="cyberpunk">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#0d0221,#150050)">
+                <span class="ui-theme-accent" style="background:#ff2e63"></span>
+              </div>
+              <span class="ui-theme-name">Cyberpunk</span>
+              <span class="ui-theme-desc">Neon pink & electric</span>
+            </div>
+            <div class="ui-theme-card" data-ui-theme="ocean">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#0c2340,#0d4e6f)">
+                <span class="ui-theme-accent" style="background:#00d4ff"></span>
+              </div>
+              <span class="ui-theme-name">Ocean</span>
+              <span class="ui-theme-desc">Deep sea calm</span>
+            </div>
+            <div class="ui-theme-card" data-ui-theme="sakura">
+              <div class="ui-theme-preview" style="background:linear-gradient(135deg,#1a1520,#2d1f3d)">
+                <span class="ui-theme-accent" style="background:#ff69b4"></span>
+              </div>
+              <span class="ui-theme-name">Sakura</span>
+              <span class="ui-theme-desc">Cherry blossom zen</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="btn-row">
+          <button id="saveBtn" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+              <polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>
+            </svg>
+            Save Settings
+          </button>
+          <button id="verifyBtn" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>
+            </svg>
+            Verify
           </button>
         </div>
-        <span class="form-hint">
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" id="createTokenLink">
-            🔑 Get your token here →
-          </a>
-        </span>
-      </div>
 
-      <div class="form-group">
-        <label for="githubRepo">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-          </svg>
-          Repository
-        </label>
-        <input type="text" id="githubRepo" placeholder="username/leetcode-solutions" autocomplete="off" spellcheck="false" />
-        <span class="form-hint">Format: owner/repo-name</span>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="btn-row">
-        <button id="saveBtn" class="btn btn-primary">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-            <polyline points="17,21 17,13 7,13 7,21"/>
-            <polyline points="7,3 7,8 15,8"/>
-          </svg>
-          Save Settings
-        </button>
-        <button id="verifyBtn" class="btn btn-secondary">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-            <polyline points="22,4 12,14.01 9,11.01"/>
-          </svg>
-          Verify
-        </button>
-      </div>
-
-      <!-- Status Message -->
-      <div id="statusMessage" class="status-message" style="display:none;"></div>
-    </div>
-
-    <!-- Stats Section -->
-    <div class="popup-stats">
-      <div class="stat-item">
-        <div class="stat-value" id="statPushCount">0</div>
-        <div class="stat-label">Pushes</div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <div class="stat-value" id="statSolvedCount">0</div>
-        <div class="stat-label">Problems</div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <div class="stat-value" id="statLastPush">—</div>
-        <div class="stat-label">Last Push</div>
+        <div id="statusMessage" class="status-message" style="display:none;"></div>
       </div>
     </div>
 
-    <!-- Problems List Section -->
-    <div class="problems-section">
-      <div class="problems-header" id="problemsToggle">
-        <span class="problems-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-          </svg>
-          Synced Problems
-        </span>
-        <svg class="problems-chevron" id="problemsChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-      <div class="problems-list-wrapper" id="problemsWrapper" style="display:none;">
-        <div class="problems-list" id="problemsList">
-          <div class="problems-empty">No problems synced yet</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer with branding -->
+    <!-- Footer -->
     <div class="popup-footer">
       <span>Made by</span>
       <a href="https://deveshsamant.in/" target="_blank" id="portfolioLink">Devesh Samant</a>
