@@ -64,9 +64,100 @@
     document.body.prepend(banner);
   }
 
-  // ── State ──────────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────
   let isProcessing = false;
   let isConfigured = false;
+  let wrongStreak = 0;
+
+  // ── Roast Messages System ────────────────────────────────────────
+  const WRONG_ANSWER_ROASTS = [
+    // Streak 1-3: Light teasing
+    'HAHHAHAHAA Fool TRY AGAIN 🤡',
+    'Bro really thought that would work 😂',
+    'Nah... just nah. Try again 🙄',
+    'Even a random number generator would do better 🎲',
+    'Your code said "trust me bro" and lied 🤥',
+    // Streak 4-6: Getting savage
+    'At this point the compiler is judging you 💀',
+    'That code belongs in a museum... of failures 🏛️',
+    'Google is free you know... just saying 👀',
+    'Plot twist: the bug was the developer 🐛',
+    'Your code has more bugs than a rainforest 🌴',
+    // Streak 7-9: Brutal
+    'Bro is fighting for his life out here ⚔️',
+    'Even ChatGPT would\'ve gotten this right 🤖',
+    'Your code is so wrong it created a new bug species 🪲',
+    'The test cases are laughing at you rn 🤣',
+    'Have you considered a career in... not coding? 💼',
+    // Streak 10-12: Nuclear
+    'ERROR 404: Brain not found 🧠',
+    '10 wrong answers... this problem owns you now 👑',
+    'Legend says he\'s still getting Wrong Answer to this day 📜',
+    'Bro typed random code and hit Submit 🎰',
+    'The problem: Easy. You: Struggling. Life: Unfair. 😭',
+    // Streak 13+: Existential crisis
+    'At this point just mass report the question 🚩',
+    'Leave LeetCode... or this planet 🚀',
+    'Uninstall your IDE. Touch some grass 🌿',
+    'The editorial is RIGHT THERE bro 👉📚',
+    'Your submission history is a horror movie 🎬',
+    'Bruh you\'ve been wrong more times than a broken clock ⏰',
+    'Even brute force is embarrassed by you 💪',
+    'You vs This Problem: 0 - infinity ♾️',
+    'Plot twist: there is no plot twist. You\'re just wrong. 💥',
+    'Time to mass report this question and go to sleep 😴',
+  ];
+
+  const TLE_ROASTS = [
+    'Time Limit Exceeded... just like my patience with you ⏳',
+    'Your code is slower than a Monday morning 🐢',
+    'O(n²)? More like O(my god why) 💨',
+    'Even a snail would\'ve finished by now 🐌',
+    'Your code took so long, the question got deprecated ☠️',
+  ];
+
+  const RUNTIME_ERROR_ROASTS = [
+    'Runtime Error: your code crashed harder than your confidence 💣',
+    'Segfault? More like seg-FAULT of yours 🪦',
+    'Your code didn\'t just fail, it rage quit 🚨',
+    'NullPointerException in your logic... and your life 📍',
+    'Your code committed sudoku ⚔️',
+  ];
+
+  const COMPILE_ERROR_ROASTS = [
+    'Compile Error?? You didn\'t even write valid code bruh 😐',
+    'The compiler said: "I don\'t even know what you\'re trying" 🫣',
+    'Bro submitted a creative writing essay, not code 📝',
+    'Syntax error? You had ONE job 🙄',
+  ];
+
+  function getFailRoast(statusMsg) {
+    let pool;
+    if (statusMsg === 'Wrong Answer') {
+      // Escalating roasts based on streak
+      wrongStreak++;
+      const streakPrefix = wrongStreak >= 5
+        ? `🔥 ${wrongStreak} wrong in a row! `
+        : wrongStreak >= 3
+        ? `❌ ${wrongStreak}x wrong! `
+        : '';
+      pool = WRONG_ANSWER_ROASTS;
+      // Pick from later (more savage) messages as streak grows
+      const minIndex = Math.min(Math.floor((wrongStreak - 1) / 2) * 3, pool.length - 5);
+      const maxIndex = Math.min(minIndex + 8, pool.length);
+      const idx = minIndex + Math.floor(Math.random() * (maxIndex - minIndex));
+      return streakPrefix + pool[idx];
+    } else if (statusMsg === 'Time Limit Exceeded') {
+      pool = TLE_ROASTS;
+    } else if (statusMsg === 'Runtime Error') {
+      pool = RUNTIME_ERROR_ROASTS;
+    } else if (statusMsg === 'Compile Error') {
+      pool = COMPILE_ERROR_ROASTS;
+    } else {
+      return `Submission: ${statusMsg}. Not pushing to GitHub.`;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
 
   // ── Toast Notification System ──────────────────────────────
   function showToast(message, type = 'info', duration = 4000) {
@@ -361,15 +452,23 @@
 
       if (result?.status_msg === 'Accepted') {
         console.log('[LeetSync] ✅ ACCEPTED — starting GitHub push');
+        // Reset wrong streak on success
+        if (wrongStreak > 0) {
+          const prevStreak = wrongStreak;
+          wrongStreak = 0;
+          if (prevStreak >= 3) {
+            showToast(`Finally! 🎉 After ${prevStreak} wrong attempts... pushing to GitHub`, 'info', 3000);
+            setTimeout(() => handleAcceptedResult(result), 2500);
+            return;
+          }
+        }
         handleAcceptedResult(result);
       } else {
         const statusMsg = result?.status_msg || 'Unknown';
         console.log('[LeetSync] ❌ Not accepted:', statusMsg);
-        if (statusMsg === 'Wrong Answer') {
-          showToast('HAHHAHAHAA Fool TRY AGAIN 🤡', 'error', 5000);
-        } else {
-          showToast(`Submission: ${statusMsg}. Not pushing to GitHub.`, 'warning');
-        }
+        const roast = getFailRoast(statusMsg);
+        const type = statusMsg === 'Wrong Answer' ? 'error' : 'warning';
+        showToast(roast, type, 6000);
       }
     }
   });
