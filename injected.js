@@ -12,15 +12,21 @@
 (function () {
   'use strict';
 
-  if (window.__lcPusherInjected) return;
-  window.__lcPusherInjected = true;
+  // Version-based guard: allows re-injection when extension updates
+  const INJECTOR_VERSION = 2;
+  if (window.__lcPusherVersion >= INJECTOR_VERSION) return;
+  window.__lcPusherVersion = INJECTOR_VERSION;
 
-  console.log('[LeetSync] Main world interceptor loaded');
+  console.log(`[LeetSync] Main world interceptor v${INJECTOR_VERSION} loaded`);
 
   // ── Track pending REAL submissions ──────────────────────────
   // Only submission IDs from /submit/ are tracked.
   // /interpret_solution/ (Run Code) IDs are NOT tracked.
-  const pendingSubmissions = new Set();
+  // Stored on window so it persists across re-injections.
+  if (!window.__lcPendingSubmissions) {
+    window.__lcPendingSubmissions = new Set();
+  }
+  const pendingSubmissions = window.__lcPendingSubmissions;
 
   // Save the true original only once (survives re-injection)
   if (!window.__lcOriginalFetch) {

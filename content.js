@@ -11,11 +11,12 @@
 (function () {
   'use strict';
 
-  // Prevent double-injection
-  if (window.__leetcodePusherContentLoaded) return;
-  window.__leetcodePusherContentLoaded = true;
+  // Version-based guard: allows re-injection when extension updates
+  const CONTENT_VERSION = 2;
+  if (window.__leetcodePusherContentVersion >= CONTENT_VERSION) return;
+  window.__leetcodePusherContentVersion = CONTENT_VERSION;
 
-  console.log('[LeetCode Pusher] Content script loaded (ISOLATED world)');
+  console.log(`[LeetSync] Content script v${CONTENT_VERSION} loaded (ISOLATED world)`);
 
   // ── Extension Context Guard ────────────────────────────────
   // After reloading the extension, the old content script's chrome
