@@ -966,6 +966,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  // Add a friend/rival
+  if (message.type === 'ADD_FRIEND') {
+    addFriend(message.username, message.repoName)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  // Remove a friend/rival
+  if (message.type === 'REMOVE_FRIEND') {
+    chrome.storage.sync.get(['friends'], (data) => {
+      const friends = (data.friends || []).filter(f => f.username !== message.username);
+      chrome.storage.sync.set({ friends }, () => {
+        sendResponse({ success: true });
+      });
+    });
+    return true;
+  }
 });
 
 /**
@@ -1168,6 +1187,164 @@ async function deleteSingleSolution(problemNumber, folderName, fileName) {
 
   console.log(`[LeetSync] ✅ Solution ${fileName} deleted and renumbered`);
   return { success: true, remaining: (problem?.solutionCount || 1) - 1 };
+}
+
+/**
+ * Add a friend/rival by GitHub username.
+ * If repoName is provided, uses username/repoName directly.
+ * Otherwise, auto-discovers their LeetSync repo.
+ */
+async function addFriend(username, repoName) {
+  const settings = await chrome.storage.sync.get(['githubToken', 'friends']);
+  const token = settings.githubToken;
+  const friends = settings.friends || [];
+
+  // Check if already added
+  if (friends.some(f => f.username.toLowerCase() === username.toLowerCase())) {
+    return { success: false, error: 'Already added!' };
+  }
+
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'LeetSync-Chrome-Extension',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Step 1: Check if user exists
+  let userRes;
+  try {
+    userRes = await fetch(`https://api.github.com/users/${username}`, { headers });
+  } catch (e) {
+    return { success: false, error: 'Network error' };
+  }
+
+  if (!userRes.ok) {
+    return { success: false, error: `User "${username}" not found` };
+  }
+
+  // Step 2: Find their LeetCode repo
+  let leetRepo = null;
+  let solvedCount = 0;
+  let languages = '';
+  let weeklyCount = 0;
+
+  // If user provided a repo name, use it directly
+  if (repoName) {
+    const fullRepo = `${username}/${repoName}`;
+    try {
+      const repoRes = await fetch(`https://api.github.com/repos/${fullRepo}`, { headers });
+      if (!repoRes.ok) {
+        return { success: false, error: `Repo "${fullRepo}" not found. Check the repo name.` };
+      }
+      leetRepo = fullRepo;
+
+      // Try to count problems from problems/ directory
+      const contentsRes = await fetch(`https://api.github.com/repos/${fullRepo}/contents/problems`, { headers });
+      if (contentsRes.ok) {
+        const contents = await contentsRes.json();
+        if (Array.isArray(contents)) {
+          solvedCount = contents.filter(f => f.type === 'dir').length;
+        }
+      }
+
+      // If no problems/ dir, try README parsing
+      if (solvedCount === 0) {
+        const readmeRes = await fetch(`https://api.github.com/repos/${fullRepo}/readme`, { headers });
+        if (readmeRes.ok) {
+          const readmeData = await readmeRes.json();
+          const readme = atob(readmeData.content);
+          const tableRows = readme.match(/\|\s*\d+\s*\|/g);
+          if (tableRows) solvedCount = tableRows.length;
+        }
+      }
+    } catch (e) {
+      return { success: false, error: 'Failed to access repo: ' + e.message };
+    }
+  } else {
+    // Auto-discover: search their repos
+    try {
+      const reposRes = await fetch(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers });
+      if (reposRes.ok) {
+        const repos = await reposRes.json();
+
+        const candidates = repos.filter(r =>
+          !r.fork && (
+            r.name.toLowerCase().includes('leet') ||
+            r.name.toLowerCase().includes('dsa') ||
+            r.name.toLowerCase().includes('algorithm') ||
+            r.name.toLowerCase().includes('coding') ||
+            (r.description || '').toLowerCase().includes('leetcode')
+          )
+        );
+
+        // Try each candidate to find one with problems/ folder
+        for (const repo of candidates) {
+          try {
+            const contentsRes = await fetch(`https://api.github.com/repos/${repo.full_name}/contents/problems`, { headers });
+            if (contentsRes.ok) {
+              const contents = await contentsRes.json();
+              if (Array.isArray(contents)) {
+                leetRepo = repo.full_name;
+                solvedCount = contents.filter(f => f.type === 'dir').length;
+                break;
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+
+        // If no repo with problems/ found, try README parsing on the first candidate
+        if (!leetRepo && candidates.length > 0) {
+          leetRepo = candidates[0].full_name;
+          try {
+            const readmeRes = await fetch(`https://api.github.com/repos/${leetRepo}/readme`, { headers });
+            if (readmeRes.ok) {
+              const readmeData = await readmeRes.json();
+              const readme = atob(readmeData.content);
+              const tableRows = readme.match(/\|\s*\d+\s*\|/g);
+              if (tableRows) solvedCount = tableRows.length;
+            }
+          } catch (e) { /* skip */ }
+        }
+      }
+    } catch (e) { /* skip repo search */ }
+  }
+
+  // Step 3: Get recent commits for weekly count
+  if (leetRepo) {
+    try {
+      const now = new Date();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const since = monday.toISOString();
+
+      const commitsRes = await fetch(
+        `https://api.github.com/repos/${leetRepo}/commits?since=${since}&per_page=100`,
+        { headers }
+      );
+      if (commitsRes.ok) {
+        const commits = await commitsRes.json();
+        weeklyCount = commits.filter(c =>
+          c.commit?.message && !c.commit.message.startsWith('Merge')
+        ).length;
+      }
+    } catch (e) { /* skip */ }
+  }
+
+  const friend = {
+    username,
+    repo: leetRepo,
+    solvedCount,
+    languages: languages || 'N/A',
+    weeklyCount,
+    lastFetched: new Date().toISOString(),
+  };
+
+  friends.push(friend);
+  await chrome.storage.sync.set({ friends });
+
+  console.log(`[LeetSync] ⚔️ Added rival: ${username} (${solvedCount} problems, repo: ${leetRepo})`);
+  return { success: true, friend };
 }
 
 /**
@@ -1566,3 +1743,68 @@ async function createGitHubRepo(repoName, isPrivate = false) {
     private: response.private,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 🔧 REMOTE CONFIG SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/Deveshsamant/LeetSync/main/remote-config.json';
+
+/**
+ * Fetch remote config from GitHub and store locally.
+ */
+async function fetchRemoteConfig() {
+  try {
+    const res = await fetch(REMOTE_CONFIG_URL + '?t=' + Date.now(), {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) {
+      console.log('[LeetSync] Remote config fetch failed:', res.status);
+      return null;
+    }
+    const config = await res.json();
+    await chrome.storage.local.set({ remoteConfig: config, remoteConfigFetched: new Date().toISOString() });
+    console.log('[LeetSync] 🔧 Remote config updated:', config.latestVersion);
+    return config;
+  } catch (e) {
+    console.log('[LeetSync] Remote config fetch error:', e.message);
+    return null;
+  }
+}
+
+// ── Alarm: check remote config every 6 hours ──
+chrome.alarms.create('checkRemoteConfig', { periodInMinutes: 360 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'checkRemoteConfig') {
+    fetchRemoteConfig();
+  }
+});
+
+// ── On Install / Update: detect version changes ──
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    console.log('[LeetSync] 🎉 Extension installed!');
+    chrome.storage.local.set({
+      installedVersion: chrome.runtime.getManifest().version,
+      installDate: new Date().toISOString(),
+    });
+    fetchRemoteConfig();
+  }
+
+  if (details.reason === 'update') {
+    const newVersion = chrome.runtime.getManifest().version;
+    const prevVersion = details.previousVersion;
+    console.log(`[LeetSync] 🆕 Updated from ${prevVersion} → ${newVersion}`);
+    chrome.storage.local.set({
+      installedVersion: newVersion,
+      previousVersion: prevVersion,
+      showWhatsNew: true,
+      updateDate: new Date().toISOString(),
+    });
+    fetchRemoteConfig();
+  }
+});
+
+// Fetch config on service worker startup
+fetchRemoteConfig();

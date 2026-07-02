@@ -64,6 +64,100 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // 🔧 REMOTE CONFIG — Maintenance, Updates, Announcements
+  // ═══════════════════════════════════════════════════════════
+  chrome.storage.local.get(['remoteConfig', 'showWhatsNew', 'dismissedAnnouncement'], (data) => {
+    const config = data.remoteConfig;
+    if (!config) return;
+
+    const currentVersion = chrome.runtime.getManifest().version;
+
+    // ── Maintenance Banner ──
+    if (config.maintenance && config.maintenance.active) {
+      const banner = document.getElementById('maintenanceBanner');
+      document.getElementById('maintMessage').textContent = config.maintenance.message || 'We\'ll be back soon!';
+      banner.style.display = 'flex';
+
+      if (config.maintenance.endsAt) {
+        const endsAt = new Date(config.maintenance.endsAt);
+        function updateCountdown() {
+          const now = new Date();
+          const diff = endsAt - now;
+          if (diff <= 0) {
+            document.getElementById('maintCountdown').textContent = 'Should be back any moment!';
+            return;
+          }
+          const hrs = Math.floor(diff / 3600000);
+          const mins = Math.floor((diff % 3600000) / 60000);
+          document.getElementById('maintCountdown').textContent = `Back in ~${hrs}h ${mins}m`;
+        }
+        updateCountdown();
+        setInterval(updateCountdown, 60000);
+      }
+    }
+
+    // ── Announcement Banner ──
+    if (config.announcement && config.announcement.active && config.announcement.message) {
+      if (data.dismissedAnnouncement !== config.announcement.message) {
+        const banner = document.getElementById('announceBanner');
+        document.getElementById('announceText').textContent = config.announcement.message;
+        banner.style.display = 'flex';
+        banner.className = 'announce-banner announce-' + (config.announcement.type || 'info');
+
+        document.getElementById('announceDismiss').addEventListener('click', () => {
+          banner.style.display = 'none';
+          chrome.storage.local.set({ dismissedAnnouncement: config.announcement.message });
+        });
+      }
+    }
+
+    // ── Update Available Banner ──
+    if (config.latestVersion && config.latestVersion !== currentVersion) {
+      // Simple version comparison (works for semver like 1.0.0 < 1.1.0)
+      const latest = config.latestVersion.split('.').map(Number);
+      const current = currentVersion.split('.').map(Number);
+      let isNewer = false;
+      for (let i = 0; i < 3; i++) {
+        if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
+        if ((latest[i] || 0) < (current[i] || 0)) break;
+      }
+      if (isNewer) {
+        const banner = document.getElementById('updateBanner');
+        document.getElementById('updateText').textContent = `v${config.latestVersion} available! Update from Chrome Web Store.`;
+        banner.style.display = 'flex';
+      }
+    }
+
+    // ── What's New Modal ──
+    if (data.showWhatsNew && config.changelog) {
+      const changes = config.changelog[currentVersion];
+      if (changes && changes.length > 0) {
+        const modal = document.getElementById('whatsNewModal');
+        document.getElementById('whatsNewVersion').textContent = 'v' + currentVersion;
+        const list = document.getElementById('whatsNewList');
+        list.innerHTML = '';
+        changes.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          list.appendChild(li);
+        });
+        modal.style.display = 'flex';
+
+        document.getElementById('whatsNewClose').addEventListener('click', () => {
+          modal.style.display = 'none';
+          chrome.storage.local.set({ showWhatsNew: false });
+        });
+        document.querySelector('.whatsnew-backdrop').addEventListener('click', () => {
+          modal.style.display = 'none';
+          chrome.storage.local.set({ showWhatsNew: false });
+        });
+      } else {
+        chrome.storage.local.set({ showWhatsNew: false });
+      }
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // WIZARD LOGIC
   // ═══════════════════════════════════════════════════════════
   let wizCurrentStep = 1;
@@ -177,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dashboard: document.getElementById('tabDashboard'),
     problems: document.getElementById('tabProblems'),
     settings: document.getElementById('tabSettings'),
+    battle: document.getElementById('tabBattle'),
   };
 
   tabBtns.forEach(btn => {
@@ -189,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (tab === 'problems') loadProblems();
       if (tab === 'dashboard') loadDashboard();
+      if (tab === 'battle') loadBattle();
     });
   });
 
@@ -477,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="problem-actions">
+            <button class="problem-share" title="Share showcase card">📸</button>
             <button class="problem-toggle" title="View solutions">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9"/></svg>
             </button>
@@ -501,6 +598,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (expanded) {
           loadSolutions(p, panel, item);
         }
+      });
+
+      // Share showcase card
+      const shareBtn = item.querySelector('.problem-share');
+      shareBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openShowcaseModal(p);
       });
 
       // Delete entire problem
@@ -732,4 +836,421 @@ document.addEventListener('DOMContentLoaded', () => {
     statusMessage.style.display = 'block';
     setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // ⚔️ FRIEND BATTLE SYSTEM
+  // ═══════════════════════════════════════════════════════════
+  const friendList = document.getElementById('friendList');
+  const friendInput = document.getElementById('friendUsername');
+  const addFriendBtn = document.getElementById('addFriendBtn');
+  const friendError = document.getElementById('friendError');
+
+  function showFriendError(msg) {
+    friendError.textContent = msg;
+    friendError.style.display = 'block';
+    setTimeout(() => { friendError.style.display = 'none'; }, 4000);
+  }
+
+  function loadBattle() {
+    chrome.storage.sync.get(['friends'], (data) => {
+      const friends = data.friends || [];
+      renderFriendCards(friends);
+      updateWeeklyChallenge(friends);
+    });
+  }
+
+  addFriendBtn.addEventListener('click', () => {
+    const username = friendInput.value.trim();
+    const repoInput = document.getElementById('friendRepo');
+    const repoName = repoInput.value.trim();
+    if (!username) { showFriendError('Enter a GitHub username'); return; }
+
+    addFriendBtn.disabled = true;
+    addFriendBtn.innerHTML = '<div class="spinner"></div>';
+
+    chrome.runtime.sendMessage({ type: 'ADD_FRIEND', username, repoName }, (res) => {
+      addFriendBtn.disabled = false;
+      addFriendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Add';
+
+      if (chrome.runtime.lastError) {
+        showFriendError(chrome.runtime.lastError.message);
+        return;
+      }
+
+      if (!res?.success) {
+        showFriendError(res?.error || 'Failed to add friend');
+        return;
+      }
+
+      friendInput.value = '';
+      repoInput.value = '';
+      loadBattle();
+    });
+  });
+
+  friendInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addFriendBtn.click();
+  });
+
+  function renderFriendCards(friends) {
+    if (!friends || friends.length === 0) {
+      friendList.innerHTML = '<div class="problems-empty">No rivals yet. Add one above! ⚔️</div>';
+      return;
+    }
+
+    friendList.innerHTML = '';
+
+    // Get your stats for comparison
+    chrome.storage.local.get(['solvedProblems', 'pushCount'], (myData) => {
+      const myCount = Object.keys(myData.solvedProblems || {}).length;
+
+      friends.forEach(friend => {
+        const card = document.createElement('div');
+        card.className = 'friend-card';
+
+        const friendCount = friend.solvedCount || 0;
+        const maxCount = Math.max(myCount, friendCount, 1);
+        const myPct = Math.round((myCount / maxCount) * 100);
+        const friendPct = Math.round((friendCount / maxCount) * 100);
+        const winning = myCount > friendCount ? 'you' : myCount < friendCount ? 'them' : 'tie';
+
+        const vsEmoji = winning === 'you' ? '💪' : winning === 'them' ? '😤' : '🤝';
+
+        card.innerHTML = `
+          <div class="friend-header">
+            <img class="friend-avatar" src="https://github.com/${friend.username}.png?size=40" alt="${friend.username}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%23333%22 width=%2240%22 height=%2240%22/><text x=%2220%22 y=%2226%22 text-anchor=%22middle%22 fill=%22%23888%22 font-size=%2216%22>?</text></svg>'">
+            <div class="friend-info">
+              <span class="friend-name">${friend.username}</span>
+              <span class="friend-repo">${friend.repo || 'No LeetSync repo'}</span>
+            </div>
+            <div class="friend-vs">${vsEmoji}</div>
+            <button class="friend-remove" data-username="${friend.username}" title="Remove rival">✕</button>
+          </div>
+          <div class="friend-comparison">
+            <div class="compare-row">
+              <span class="compare-label you-label">You</span>
+              <div class="compare-bar-track">
+                <div class="compare-bar-fill you-bar" style="width:${myPct}%"></div>
+              </div>
+              <span class="compare-value">${myCount}</span>
+            </div>
+            <div class="compare-row">
+              <span class="compare-label them-label">${friend.username.substring(0, 8)}</span>
+              <div class="compare-bar-track">
+                <div class="compare-bar-fill them-bar" style="width:${friendPct}%"></div>
+              </div>
+              <span class="compare-value">${friendCount}</span>
+            </div>
+          </div>
+          <div class="friend-footer">
+            <span class="friend-stat">${friend.languages || 'Unknown'}</span>
+            <span class="friend-updated">${friend.lastFetched ? 'Updated ' + timeAgo(friend.lastFetched) : ''}</span>
+          </div>
+        `;
+
+        // Remove friend handler
+        card.querySelector('.friend-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          chrome.runtime.sendMessage({ type: 'REMOVE_FRIEND', username: friend.username }, () => {
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0';
+            card.style.maxHeight = '0';
+            setTimeout(() => { card.remove(); loadBattle(); }, 300);
+          });
+        });
+
+        friendList.appendChild(card);
+      });
+    });
+  }
+
+  function updateWeeklyChallenge(friends) {
+    chrome.storage.local.get(['solvedProblems'], (data) => {
+      const problems = Object.values(data.solvedProblems || {});
+      const now = new Date();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const mondayStr = monday.toISOString().split('T')[0];
+
+      const yourWeekly = problems.filter(p => p.date >= mondayStr).length;
+      document.getElementById('yourWeeklyScore').textContent = yourWeekly;
+
+      const maxWeekly = Math.max(yourWeekly, 1);
+      document.getElementById('yourWeeklyBar').style.width = Math.round((yourWeekly / maxWeekly) * 100) + '%';
+
+      // Add friend bars to weekly
+      const weeklyBars = document.getElementById('weeklyBars');
+      // Remove old friend bars (keep only the "You" row)
+      weeklyBars.querySelectorAll('.friend-weekly-row').forEach(el => el.remove());
+
+      friends.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'weekly-bar-row friend-weekly-row';
+        const fScore = f.weeklyCount || 0;
+        const fPct = Math.round((fScore / Math.max(yourWeekly, fScore, 1)) * 100);
+
+        // Recalculate your bar with new max
+        const newMax = Math.max(yourWeekly, fScore, 1);
+        document.getElementById('yourWeeklyBar').style.width = Math.round((yourWeekly / newMax) * 100) + '%';
+
+        row.innerHTML = `
+          <span class="weekly-name">${f.username.substring(0, 8)}</span>
+          <div class="weekly-bar-track">
+            <div class="weekly-bar-fill them-fill" style="width:${fPct}%"></div>
+          </div>
+          <span class="weekly-score">${fScore}</span>
+        `;
+        weeklyBars.appendChild(row);
+      });
+
+      // Days until Monday reset
+      const daysLeft = (7 - ((now.getDay() + 6) % 7)) % 7 || 7;
+      document.getElementById('weeklyReset').textContent = daysLeft === 7 ? 'Resets today!' : `Resets in ${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
+    });
+  }
+
+  function timeAgo(isoStr) {
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 📸 SHOWCASE CARD SYSTEM
+  // ═══════════════════════════════════════════════════════════
+  const showcaseModal = document.getElementById('showcaseModal');
+  const showcaseCanvas = document.getElementById('showcaseCanvas');
+  const showcaseClose = document.getElementById('showcaseClose');
+  const showcaseCopy = document.getElementById('showcaseCopy');
+  const showcaseDownload = document.getElementById('showcaseDownload');
+  let currentShowcaseProblem = null;
+
+  function openShowcaseModal(problem) {
+    currentShowcaseProblem = problem;
+    showcaseModal.style.display = 'flex';
+    renderShowcaseCard(problem);
+  }
+
+  function closeShowcaseModal() {
+    showcaseModal.style.display = 'none';
+    currentShowcaseProblem = null;
+  }
+
+  showcaseClose.addEventListener('click', closeShowcaseModal);
+  document.querySelector('.showcase-backdrop').addEventListener('click', closeShowcaseModal);
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function renderShowcaseCard(p) {
+    const canvas = showcaseCanvas;
+    const ctx = canvas.getContext('2d');
+    const W = 600, H = 340;
+    const dpr = 2;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+
+    const diffColors = {
+      Easy:   { main: '#00b8a3', bg: '#0a2e2a', glow: 'rgba(0,184,163,0.3)' },
+      Medium: { main: '#ffa116', bg: '#2e2210', glow: 'rgba(255,161,22,0.3)' },
+      Hard:   { main: '#ef4743', bg: '#2e1010', glow: 'rgba(239,71,67,0.3)' },
+    };
+    const diff = diffColors[p.difficulty] || diffColors.Easy;
+
+    // Background
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0d1117');
+    bgGrad.addColorStop(0.5, '#161b22');
+    bgGrad.addColorStop(1, '#0d1117');
+    ctx.fillStyle = bgGrad;
+    roundRect(ctx, 0, 0, W, H, 16);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = diff.main;
+    ctx.lineWidth = 2;
+    roundRect(ctx, 1, 1, W - 2, H - 2, 16);
+    ctx.stroke();
+
+    // Top accent bar
+    ctx.fillStyle = diff.main;
+    ctx.fillRect(16, 0, W - 32, 4);
+
+    // Problem number badge
+    ctx.fillStyle = diff.bg;
+    roundRect(ctx, 24, 22, 70, 36, 8);
+    ctx.fill();
+    ctx.strokeStyle = diff.main + '60';
+    ctx.lineWidth = 1;
+    roundRect(ctx, 24, 22, 70, 36, 8);
+    ctx.stroke();
+    ctx.fillStyle = diff.main;
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('#' + p.number, 59, 46);
+
+    // Title
+    ctx.fillStyle = '#f0f6fc';
+    ctx.font = 'bold 20px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    const title = p.title.length > 28 ? p.title.substring(0, 26) + '...' : p.title;
+    ctx.fillText(title, 108, 48);
+
+    // Difficulty badge
+    const diffText = (p.difficulty || 'Easy').toUpperCase();
+    ctx.font = 'bold 11px Inter, sans-serif';
+    const diffW = ctx.measureText(diffText).width + 16;
+    ctx.fillStyle = diff.main + '20';
+    roundRect(ctx, 24, 70, diffW, 22, 4);
+    ctx.fill();
+    ctx.fillStyle = diff.main;
+    ctx.textAlign = 'left';
+    ctx.fillText(diffText, 32, 85);
+
+    // Language badge
+    if (p.language) {
+      ctx.fillStyle = 'rgba(139,148,158,0.15)';
+      const langW = ctx.measureText(p.language).width + 16;
+      roundRect(ctx, 28 + diffW, 70, langW, 22, 4);
+      ctx.fill();
+      ctx.fillStyle = '#8b949e';
+      ctx.fillText(p.language, 36 + diffW, 85);
+    }
+
+    // Motivational quote
+    const quotes = {
+      Easy: ['Clean solve! 🎯', 'Warmed up! 💪', 'Easy peasy! ✅'],
+      Medium: ['Nice grind! 🔥', 'Big brain move! 🧠', 'Level up! ⬆️'],
+      Hard: ['ABSOLUTE BEAST! 🐉', 'Galaxy brain! 🌌', 'Legendary! 👑'],
+    };
+    const quoteList = quotes[p.difficulty] || quotes.Easy;
+    const quote = quoteList[Math.floor(Math.random() * quoteList.length)];
+    ctx.fillStyle = diff.main;
+    ctx.font = 'bold 12px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(quote, W - 24, 48);
+
+    // Divider
+    ctx.strokeStyle = 'rgba(48,54,61,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(24, 106);
+    ctx.lineTo(W - 24, 106);
+    ctx.stroke();
+
+    // Stats boxes
+    const stats = [
+      { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
+      { label: 'RUNTIME', value: p.bestRuntime ? p.bestRuntime + 'ms' : 'N/A', icon: '⚡' },
+      { label: 'MEMORY', value: p.bestMemory ? p.bestMemory + 'MB' : 'N/A', icon: '💾' },
+    ];
+    const statW = (W - 48) / 3;
+    stats.forEach((s, i) => {
+      const x = 24 + i * statW;
+      ctx.fillStyle = 'rgba(22,27,34,0.8)';
+      roundRect(ctx, x + 4, 118, statW - 8, 72, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(48,54,61,0.4)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, x + 4, 118, statW - 8, 72, 8);
+      ctx.stroke();
+
+      ctx.font = '18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f0f6fc';
+      ctx.fillText(s.icon, x + statW / 2, 143);
+
+      ctx.fillStyle = '#f0f6fc';
+      ctx.font = 'bold 18px Inter, sans-serif';
+      ctx.fillText(s.value, x + statW / 2, 166);
+
+      ctx.fillStyle = '#484f58';
+      ctx.font = '600 9px Inter, sans-serif';
+      ctx.fillText(s.label, x + statW / 2, 181);
+    });
+
+    // Date
+    ctx.fillStyle = '#484f58';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Solved: ' + (p.date || 'Unknown'), 28, 216);
+
+    // Dot grid decoration
+    ctx.fillStyle = 'rgba(48,54,61,0.2)';
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 20; col++) {
+        ctx.beginPath();
+        ctx.arc(28 + col * 14, 236 + row * 14, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Bottom branding
+    const brandGrad = ctx.createLinearGradient(0, H - 50, 0, H);
+    brandGrad.addColorStop(0, 'rgba(13,17,23,0)');
+    brandGrad.addColorStop(1, 'rgba(13,17,23,0.95)');
+    ctx.fillStyle = brandGrad;
+    ctx.fillRect(0, H - 50, W, 50);
+
+    ctx.fillStyle = '#ffa116';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('⚡ LeetSync', 24, H - 16);
+
+    chrome.storage.sync.get(['githubRepo'], (data) => {
+      if (data.githubRepo) {
+        ctx.fillStyle = '#484f58';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('github.com/' + data.githubRepo, W - 24, H - 16);
+      }
+    });
+  }
+
+  // Copy card to clipboard
+  showcaseCopy.addEventListener('click', async () => {
+    try {
+      const blob = await new Promise(resolve => showcaseCanvas.toBlob(resolve, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Copied!';
+      setTimeout(() => {
+        showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Image';
+      }, 2000);
+    } catch (err) {
+      showcaseCopy.textContent = '❌ Failed';
+      setTimeout(() => {
+        showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Image';
+      }, 2000);
+    }
+  });
+
+  // Download card as PNG
+  showcaseDownload.addEventListener('click', () => {
+    const p = currentShowcaseProblem;
+    if (!p) return;
+    const link = document.createElement('a');
+    link.download = 'leetsync-' + p.number + '-' + p.title.replace(/\s+/g, '-').toLowerCase() + '.png';
+    link.href = showcaseCanvas.toDataURL('image/png');
+    link.click();
+  });
+
 });

@@ -1,0 +1,31 @@
+{
+  "latestVersion": "1.1.0",
+  "maintenance": {
+    "active": false,
+    "message": "We're upgrading LeetSync! Be right back.",
+    "endsAt": "2026-07-05T12:00:00Z"
+  },
+  "announcement": {
+    "active": false,
+    "message": "",
+    "type": "info"
+  },
+  "changelog": {
+    "1.1.0": [
+      "📸 Solution Showcase Cards — share your solves as beautiful PNG images",
+      "⚔️ Friend Battle System — add rivals, compare stats, weekly challenges",
+      "🗑️ Individual solution deletion with auto-renumbering",
+      "🔧 Remote config: maintenance mode & update notifications",
+      "🏆 Achievement badge grid alignment fix"
+    ],
+    "1.0.0": [
+      "🚀 Auto-push accepted LeetCode solutions to GitHub",
+      "🎨 6 extension themes (Dark Pro, Glass, Arcade, Cyberpunk, Ocean, Sakura)",
+      "📊 Analytics dashboard with heatmap & stats",
+      "🏆 15 achievement badges",
+      "🔥 Daily streak counter",
+      "📡 Offline queue for failed pushes",
+      "📝 5 README themes for your GitHub repo"
+    ]
+  }
+}
