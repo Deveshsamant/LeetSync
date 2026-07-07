@@ -1430,8 +1430,11 @@ async function syncStatsFromGitHub(repo) {
       const existingReadme = await getFile(repo, 'README.md');
       if (existingReadme) {
         try {
-          const content = atob(existingReadme.content.replace(/\n/g, ''));
-          const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*[🟢🟡🔴⚪]\s*(\w+)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
+          // Properly decode UTF-8 from base64 (atob doesn't handle multi-byte chars like emojis)
+          const raw = atob(existingReadme.content.replace(/\n/g, ''));
+          const content = decodeURIComponent(Array.from(raw, c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+          // Match table rows — use .+? for emoji+difficulty column instead of character class
+          const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*.+?\s*(Easy|Medium|Hard)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
           let m;
           while ((m = tableRowRegex.exec(content)) !== null) {
             const num = parseInt(m[1], 10);
@@ -1571,7 +1574,7 @@ async function syncStatsFromGitHub(repo) {
   await chrome.storage.local.set({
     solvedProblems: merged,
     pushCount: pushCount,
-    lastPush: merged[Object.keys(merged).pop()]?.date || localStreak.lastSolveDate || null,
+    lastPush: lastSolveDate ? new Date(lastSolveDate).toISOString() : (local.lastPush || null),
     streakData: mergedStreak,
   });
 
