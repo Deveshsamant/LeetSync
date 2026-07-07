@@ -1407,15 +1407,21 @@ async function syncStatsFromGitHub(repo) {
 
     if (tree && tree.tree) {
       // Count solution files: problems/*/sol*.ext
-      const solFileRegex = /^problems\/([^/]+)\/sol\d+\.\w+$/;
-      const problemFolders = new Set();
+      const solFileRegex = /^problems\/([^/]+)\/sol(\d+)\.(\w+)$/;
+      const problemFolders = {};
 
       tree.tree.forEach(item => {
         if (item.type === 'blob') {
           const match = item.path.match(solFileRegex);
           if (match) {
             totalPushCount++;
-            problemFolders.add(match[1]);
+            const folder = match[1];
+            const solNum = parseInt(match[2], 10);
+            const ext = match[3];
+            if (!problemFolders[folder]) {
+              problemFolders[folder] = { count: 0, ext };
+            }
+            problemFolders[folder].count = Math.max(problemFolders[folder].count, solNum);
           }
         }
       });
@@ -1429,17 +1435,40 @@ async function syncStatsFromGitHub(repo) {
           let m;
           while ((m = tableRowRegex.exec(content)) !== null) {
             const num = parseInt(m[1], 10);
+            const folder = m[3];
             parsedProblems[num] = {
               number: num,
               title: m[2],
-              folderName: m[3],
+              folderName: folder,
               difficulty: m[4],
               language: m[5],
               date: m[6],
+              solutionCount: problemFolders[folder]?.count || 1,
             };
           }
         } catch (e) {
           console.warn('[LeetSync] Could not parse README:', e.message);
+        }
+      }
+
+      // For folders not found in README, create basic entries
+      for (const [folder, info] of Object.entries(problemFolders)) {
+        const alreadyParsed = Object.values(parsedProblems).some(p => p.folderName === folder);
+        if (!alreadyParsed) {
+          // Try to parse number and title from folder name (e.g., "1-two-sum")
+          const folderMatch = folder.match(/^(\d+)-(.+)$/);
+          if (folderMatch) {
+            const num = parseInt(folderMatch[1], 10);
+            parsedProblems[num] = {
+              number: num,
+              title: folderMatch[2].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+              folderName: folder,
+              difficulty: 'Unknown',
+              language: info.ext || 'Unknown',
+              date: 'Synced',
+              solutionCount: info.count || 1,
+            };
+          }
         }
       }
     }
@@ -1447,22 +1476,108 @@ async function syncStatsFromGitHub(repo) {
     console.warn('[LeetSync] Could not fetch repo tree:', e.message);
   }
 
-  // Merge with existing local data
-  const local = await chrome.storage.local.get(['solvedProblems', 'pushCount']);
+  // ── Sync streak/heatmap from commit history ──
+  let solveHistory = [];
+  let lastSolveDate = null;
+  let currentStreak = 0;
+  let longestStreak = 0;
+
+  try {
+    // Fetch commits from last 365 days
+    const since = new Date(Date.now() - 365 * 86400000).toISOString();
+    let page = 1;
+    let allCommits = [];
+    
+    while (page <= 5) { // Max 5 pages = 500 commits
+      const commits = await githubAPI(
+        `/repos/${repo}/commits?since=${since}&per_page=100&page=${page}`
+      );
+      if (!commits || !Array.isArray(commits) || commits.length === 0) break;
+      allCommits = allCommits.concat(commits);
+      if (commits.length < 100) break;
+      page++;
+    }
+
+    // Extract unique solve dates from commits
+    const dateSet = new Set();
+    allCommits.forEach(c => {
+      if (c.commit?.message && !c.commit.message.startsWith('Merge')) {
+        const date = c.commit.author?.date || c.commit.committer?.date;
+        if (date) {
+          dateSet.add(date.split('T')[0]);
+        }
+      }
+    });
+
+    solveHistory = Array.from(dateSet).sort();
+
+    // Calculate streak from solve history
+    if (solveHistory.length > 0) {
+      lastSolveDate = solveHistory[solveHistory.length - 1];
+      
+      // Calculate current streak (counting back from today/last solve)
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      
+      if (lastSolveDate === today || lastSolveDate === yesterday) {
+        currentStreak = 1;
+        let checkDate = new Date(lastSolveDate);
+        checkDate.setDate(checkDate.getDate() - 1);
+        
+        while (dateSet.has(checkDate.toISOString().split('T')[0])) {
+          currentStreak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+      }
+
+      // Calculate longest streak
+      let tempStreak = 1;
+      const sortedDates = solveHistory.sort();
+      for (let i = 1; i < sortedDates.length; i++) {
+        const prev = new Date(sortedDates[i - 1]);
+        const curr = new Date(sortedDates[i]);
+        const diffDays = (curr - prev) / 86400000;
+        
+        if (diffDays === 1) {
+          tempStreak++;
+        } else if (diffDays > 1) {
+          longestStreak = Math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+      }
+      longestStreak = Math.max(longestStreak, tempStreak, currentStreak);
+    }
+  } catch (e) {
+    console.warn('[LeetSync] Could not fetch commit history:', e.message);
+  }
+
+  // Merge with existing local data (local takes priority for conflicts)
+  const local = await chrome.storage.local.get(['solvedProblems', 'pushCount', 'streakData']);
   const localProblems = local.solvedProblems || {};
   const merged = { ...parsedProblems, ...localProblems };
 
   const solvedCount = Object.keys(merged).length;
   const pushCount = Math.max(totalPushCount, local.pushCount || 0);
 
+  // Merge streak data
+  const localStreak = local.streakData || {};
+  const mergedStreak = {
+    currentStreak: Math.max(currentStreak, localStreak.currentStreak || 0),
+    longestStreak: Math.max(longestStreak, localStreak.longestStreak || 0),
+    lastSolveDate: lastSolveDate || localStreak.lastSolveDate || null,
+    solveHistory: [...new Set([...solveHistory, ...(localStreak.solveHistory || [])])].sort(),
+  };
+
   await chrome.storage.local.set({
     solvedProblems: merged,
     pushCount: pushCount,
+    lastPush: merged[Object.keys(merged).pop()]?.date || localStreak.lastSolveDate || null,
+    streakData: mergedStreak,
   });
 
-  console.log(`[LeetSync] Stats synced: ${solvedCount} problems, ${pushCount} total pushes`);
+  console.log(`[LeetSync] ✅ Full sync: ${solvedCount} problems, ${pushCount} pushes, ${currentStreak}-day streak, ${solveHistory.length} heatmap entries`);
 
-  return { success: true, solvedCount, pushCount };
+  return { success: true, solvedCount, pushCount, currentStreak, longestStreak, heatmapDays: solveHistory.length };
 }
 
 // ── Auto Re-injection on Extension Load ──────────────────────

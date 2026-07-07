@@ -270,8 +270,22 @@ document.addEventListener('DOMContentLoaded', () => {
       tokenInput.value = data.githubToken || '';
       repoInput.value = data.githubRepo || '';
       setStatus('connected', 'Connected');
+
+      // Auto-sync from GitHub to restore any existing data
+      if (data.githubRepo) {
+        chrome.runtime.sendMessage({ type: 'SYNC_STATS', repo: data.githubRepo }, (res) => {
+          if (chrome.runtime.lastError) return;
+          if (res?.success) {
+            console.log('[LeetSync] Auto-sync complete:', res);
+          }
+          // Reload everything after sync
+          loadDashboard();
+          loadProblems();
+        });
+      }
     });
     loadDashboard();
+    loadProblems();
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -829,6 +843,48 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         setStatus('error', 'Error');
         showMessage(`❌ ${response?.error || 'Verification failed'}`, 'error');
+      }
+    });
+  });
+
+  // ── Manual Sync from GitHub button ──
+  document.getElementById('syncFromGitHubBtn').addEventListener('click', () => {
+    const syncBtn = document.getElementById('syncFromGitHubBtn');
+    const syncStatus = document.getElementById('syncStatus');
+    const repo = repoInput.value.trim();
+
+    if (!repo) {
+      syncStatus.innerHTML = '❌ Enter your repository name first';
+      syncStatus.className = 'status-message status-error';
+      syncStatus.style.display = 'block';
+      return;
+    }
+
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = '<div class="spinner"></div> Syncing from GitHub...';
+    syncStatus.innerHTML = '⏳ Fetching problems, commits & streak data...';
+    syncStatus.className = 'status-message status-info';
+    syncStatus.style.display = 'block';
+
+    chrome.runtime.sendMessage({ type: 'SYNC_STATS', repo }, (res) => {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = '🔄 Sync from GitHub (Restore Data)';
+
+      if (chrome.runtime.lastError) {
+        syncStatus.innerHTML = `❌ ${chrome.runtime.lastError.message}`;
+        syncStatus.className = 'status-message status-error';
+        return;
+      }
+
+      if (res?.success) {
+        syncStatus.innerHTML = `✅ Restored: <strong>${res.solvedCount}</strong> problems, <strong>${res.pushCount}</strong> pushes, <strong>${res.currentStreak}</strong>-day streak, <strong>${res.heatmapDays}</strong> heatmap days`;
+        syncStatus.className = 'status-message status-success';
+        // Reload everything
+        loadDashboard();
+        loadProblems();
+      } else {
+        syncStatus.innerHTML = `❌ ${res?.error || 'Sync failed'}`;
+        syncStatus.className = 'status-message status-error';
       }
     });
   });
