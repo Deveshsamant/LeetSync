@@ -49,10 +49,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // Check if setup is needed → show wizard
   // ═══════════════════════════════════════════════════════════
-  chrome.storage.sync.get(['githubToken', 'githubRepo'], (data) => {
+  chrome.storage.sync.get(['githubToken', 'githubRepo', 'wizardStep'], (data) => {
     if (!data.githubToken || !data.githubRepo) {
       wizardOverlay.style.display = 'flex';
       mainPopup.style.display = 'none';
+
+      // Restore wizard to saved step
+      if (data.githubToken) {
+        // Token saved but no repo yet → jump to step 3
+        document.getElementById('wizToken').value = data.githubToken;
+        wizGoTo(3);
+      } else if (data.wizardStep && data.wizardStep > 1) {
+        wizGoTo(data.wizardStep);
+      }
     } else {
       wizardOverlay.style.display = 'none';
       mainPopup.style.display = 'block';
@@ -164,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function wizGoTo(step) {
     wizCurrentStep = step;
+    chrome.storage.sync.set({ wizardStep: step });
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.wizard-dot').forEach((d, i) => {
       d.classList.remove('active', 'done');
@@ -255,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizDone').addEventListener('click', () => {
     wizardOverlay.style.display = 'none';
     mainPopup.style.display = 'block';
+    chrome.storage.sync.remove('wizardStep');
     chrome.storage.sync.get(['githubToken', 'githubRepo'], (data) => {
       tokenInput.value = data.githubToken || '';
       repoInput.value = data.githubRepo || '';
