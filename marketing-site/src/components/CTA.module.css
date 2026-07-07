@@ -1,0 +1,84 @@
+.ctaSection {
+  padding: 120px 5%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  max-width: 900px;
+  width: 100%;
+  padding: 80px 40px;
+  border-radius: 32px;
+  background: linear-gradient(135deg, rgba(112, 0, 255, 0.1), rgba(0, 240, 255, 0.1));
+  border: 1px solid var(--glass-border);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.title {
+  font-size: 3rem;
+  margin-bottom: 24px;
+  color: #fff;
+  position: relative;
+  z-index: 2;
+}
+
+.description {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.buttonWrapper {
+  position: relative;
+  z-index: 2;
+}
+
+.ctaBtn {
+  background: var(--text-color);
+  color: var(--bg-color);
+  padding: 20px 48px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ctaBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+}
+
+.glow1 {
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 300px;
+  height: 300px;
+  background: var(--accent-secondary);
+  filter: blur(100px);
+  opacity: 0.3;
+  z-index: 1;
+}
+
+.glow2 {
+  position: absolute;
+  bottom: -20%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: var(--accent-color);
+  filter: blur(100px);
+  opacity: 0.3;
+  z-index: 1;
+}
