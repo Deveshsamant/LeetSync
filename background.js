@@ -1432,20 +1432,46 @@ async function syncStatsFromGitHub(repo) {
         try {
           // Properly decode UTF-8 from base64 (atob doesn't handle multi-byte chars like emojis)
           const raw = atob(existingReadme.content.replace(/\n/g, ''));
-          const content = decodeURIComponent(Array.from(raw, c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
-          // Match table rows — use .+? for emoji+difficulty column instead of character class
-          const tableRowRegex = /\|\s*(\d+)\s*\|\s*\[([^\]]+)\]\(problems\/([^)]+)\)\s*\|\s*.+?\s*(Easy|Medium|Hard)\s*\|\s*`([^`]+)`\s*\|\s*(\S+)\s*\|/g;
-          let m;
-          while ((m = tableRowRegex.exec(content)) !== null) {
-            const num = parseInt(m[1], 10);
-            const folder = m[3];
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          const content = new TextDecoder('utf-8').decode(bytes);
+
+          // Split into lines and parse table rows
+          const lines = content.split('\n');
+          for (const line of lines) {
+            // Split by pipe and trim — table format: | # | [Title](link) | 🟢 Easy | `Java` | date |
+            const cols = line.split('|').map(c => c.trim()).filter(c => c);
+            if (cols.length < 5) continue;
+
+            const numMatch = cols[0].match(/^(\d+)$/);
+            if (!numMatch) continue;
+
+            const num = parseInt(numMatch[1], 10);
+
+            const linkMatch = cols[1].match(/\[([^\]]+)\]\(problems\/([^)]+)\)/);
+            if (!linkMatch) continue;
+
+            const title = linkMatch[1];
+            const folder = linkMatch[2];
+
+            // Extract difficulty — look for Easy, Medium, or Hard in the difficulty column
+            let difficulty = 'Unknown';
+            if (/Easy/i.test(cols[2])) difficulty = 'Easy';
+            else if (/Medium/i.test(cols[2])) difficulty = 'Medium';
+            else if (/Hard/i.test(cols[2])) difficulty = 'Hard';
+
+            const langMatch = cols[3].match(/`([^`]+)`/);
+            const language = langMatch ? langMatch[1] : 'Unknown';
+
+            const date = cols[4] || 'Synced';
+
             parsedProblems[num] = {
               number: num,
-              title: m[2],
+              title,
               folderName: folder,
-              difficulty: m[4],
-              language: m[5],
-              date: m[6],
+              difficulty,
+              language,
+              date,
               solutionCount: problemFolders[folder]?.count || 1,
             };
           }
