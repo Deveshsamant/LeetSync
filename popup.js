@@ -1224,13 +1224,19 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.lineTo(W - 24, 106);
     ctx.stroke();
 
-    // Stats boxes
-    const stats = [
-      { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
-      { label: 'RUNTIME', value: p.bestRuntime ? p.bestRuntime + 'ms' : 'N/A', icon: '⚡' },
-      { label: 'MEMORY', value: p.bestMemory ? p.bestMemory + 'MB' : 'N/A', icon: '💾' },
-    ];
-    const statW = (W - 48) / 3;
+    // Stats boxes — hide runtime/memory when not available (synced cards)
+    const hasPerf = p.bestRuntime || p.bestMemory;
+    const stats = hasPerf
+      ? [
+          { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
+          { label: 'RUNTIME', value: p.bestRuntime ? p.bestRuntime + 'ms' : 'N/A', icon: '⚡' },
+          { label: 'MEMORY', value: p.bestMemory ? p.bestMemory + 'MB' : 'N/A', icon: '💾' },
+        ]
+      : [
+          { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
+          { label: 'SOLVED', value: p.date || '—', icon: '📅' },
+        ];
+    const statW = (W - 48) / stats.length;
     stats.forEach((s, i) => {
       const x = 24 + i * statW;
       ctx.fillStyle = 'rgba(22,27,34,0.8)';
@@ -1248,6 +1254,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       ctx.fillStyle = '#f0f6fc';
       ctx.font = 'bold 18px Inter, sans-serif';
+      // Shrink font for long date values
+      if (s.value.length > 6) ctx.font = 'bold 14px Inter, sans-serif';
       ctx.fillText(s.value, x + statW / 2, 166);
 
       ctx.fillStyle = '#484f58';
@@ -1255,11 +1263,13 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.fillText(s.label, x + statW / 2, 181);
     });
 
-    // Date
-    ctx.fillStyle = '#484f58';
-    ctx.font = '11px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Solved: ' + (p.date || 'Unknown'), 28, 216);
+    // Date (only show when we have performance data — otherwise it's already in the stats box)
+    if (hasPerf) {
+      ctx.fillStyle = '#484f58';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Solved: ' + (p.date || 'Unknown'), 28, 216);
+    }
 
     // Dot grid decoration
     ctx.fillStyle = 'rgba(48,54,61,0.2)';
