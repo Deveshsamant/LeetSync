@@ -1,5 +1,13 @@
 /* ============================================================
-   toast.css — Toast notification styles injected into LeetCode
+   toast.css — Sync feedback injected into LeetCode.
+
+   This is where the design's "sync sequence" actually happens: the push
+   runs while the popup is closed, so the toast is the only live view of
+   it. Styled to the Signal palette so the extension reads as one system.
+
+   Class names are unchanged — content.js depends on them. Fonts stay on
+   system stacks: a content script would need web_accessible_resources to
+   load the bundled faces onto leetcode.com, which is not worth it here.
    ============================================================ */
 
 .lc-pusher-toast {
@@ -9,18 +17,19 @@
   z-index: 999999;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: 11px;
+  padding: 13px 15px;
   min-width: 320px;
   max-width: 420px;
-  border-radius: 12px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border-radius: 11px;
+  background: #0E1214;
+  border: 1px solid #1F2529;
+  color: #E9EDF0;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
   transform: translateX(120%);
   opacity: 0;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform .4s cubic-bezier(.16, 1, .3, 1), opacity .4s cubic-bezier(.16, 1, .3, 1);
   pointer-events: auto;
 }
 
@@ -29,32 +38,33 @@
   opacity: 1;
 }
 
-/* ── Toast Variants ───────────────────────────────────────── */
+/* ── Variants: a coloured left edge rather than a tinted panel, so the
+      surface stays the design's single card colour ────────────────── */
 
-.lc-pusher-toast-success {
-  background: rgba(14, 30, 20, 0.92);
-  border: 1px solid rgba(63, 185, 80, 0.3);
+.lc-pusher-toast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 11px 0 0 11px;
+  background: #3FE08B;
 }
 
-.lc-pusher-toast-error {
-  background: rgba(30, 14, 14, 0.92);
-  border: 1px solid rgba(248, 81, 73, 0.3);
-}
+.lc-pusher-toast-success::before { background: #3FE08B; }
+.lc-pusher-toast-error::before   { background: #F0736A; }
+.lc-pusher-toast-info::before    { background: #3FE08B; }
+.lc-pusher-toast-warning::before { background: #E5B34A; }
 
-.lc-pusher-toast-info {
-  background: rgba(13, 17, 23, 0.92);
-  border: 1px solid rgba(255, 161, 22, 0.3);
-}
+.lc-pusher-toast-success { border-color: rgba(63, 224, 139, .28); }
+.lc-pusher-toast-error   { border-color: rgba(240, 115, 106, .28); }
+.lc-pusher-toast-warning { border-color: rgba(229, 179, 74, .28); }
 
-.lc-pusher-toast-warning {
-  background: rgba(30, 25, 14, 0.92);
-  border: 1px solid rgba(210, 153, 34, 0.3);
-}
-
-/* ── Toast Elements ───────────────────────────────────────── */
+/* ── Elements ─────────────────────────────────────────────── */
 
 .lc-pusher-toast-icon {
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1;
   flex-shrink: 0;
   margin-top: 1px;
@@ -66,49 +76,54 @@
 }
 
 .lc-pusher-toast-title {
-  font-size: 11px;
-  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 4px;
+  color: #6B757C;
+  margin-bottom: 5px;
 }
 
 .lc-pusher-toast-message {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
-  color: #e6edf3;
-  line-height: 1.45;
+  color: #E9EDF0;
+  line-height: 1.5;
 }
 
 .lc-pusher-toast-message strong {
-  color: #ffffff;
-  font-weight: 700;
+  color: #3FE08B;
+  font-weight: 600;
 }
+
+.lc-pusher-toast-error .lc-pusher-toast-message strong { color: #F0736A; }
+.lc-pusher-toast-warning .lc-pusher-toast-message strong { color: #E5B34A; }
 
 .lc-pusher-toast-close {
   background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 18px;
+  border: 0;
+  color: #525C63;
+  font-size: 16px;
   cursor: pointer;
   padding: 0 0 0 8px;
   line-height: 1;
   flex-shrink: 0;
-  transition: color 0.2s;
+  transition: color .15s;
 }
 
-.lc-pusher-toast-close:hover {
-  color: rgba(255, 255, 255, 0.8);
-}
+.lc-pusher-toast-close:hover { color: #E9EDF0; }
 
-/* ── Animation for the info spinner ───────────────────────── */
+/* ── The in-progress state spins, matching lsSpin in the popup ────── */
 
 .lc-pusher-toast-info .lc-pusher-toast-icon {
   animation: lc-pusher-spin 1.5s linear infinite;
 }
 
 @keyframes lc-pusher-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-pusher-toast,
+  .lc-pusher-toast-icon { animation: none !important; transition: none !important; }
 }

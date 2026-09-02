@@ -1,5 +1,5 @@
 {
-  "latestVersion": "1.1.0",
+  "latestVersion": "1.6.0",
   "maintenance": {
     "active": false,
     "message": "We're upgrading LeetSync! Be right back.",
@@ -11,6 +11,40 @@
     "type": "info"
   },
   "changelog": {
+    "1.6.0": [
+      "Sheet ticks now sync across devices and survive a reinstall",
+      "New All sheets view — 895 unique problems across the seven sheets",
+      "Export and import your progress; your token is never included",
+      "Full keyboard navigation with arrow keys through the tabs",
+      "Sheets can update without waiting on a store release",
+      "Fixed: the footer dashboard button and the wizard step counter did nothing"
+    ],
+    "1.5.0": [
+      "Seven real study sheets — Striver A2Z, SDE, Blind 75 and 79, Love Babbar 450, NeetCode 150 and 250",
+      "1,667 problems, 1,152 of which tick themselves as you solve",
+      "Tick anything off-LeetCode by hand; progress is kept per sheet",
+      "Show more opens a full tracker in its own tab, with search and filters",
+      "Achievements redrawn as custom icons — no more platform emoji",
+      "Repository row opens your repo on GitHub",
+      "Set up from just your token — LeetSync finds the repo or creates it",
+      "Showcase cards removed",
+      "Deleting a solution now updates the README on GitHub too"
+    ],
+    "1.4.0": [
+      "New Sheets tab — Top Interview 150, Top 100 Liked, LeetCode 75, DP and Binary Search",
+      "Questions tick automatically as you solve them, with per-topic progress",
+      "Tap any question to open it on LeetCode in a new tab",
+      "403 curated questions, built from LeetCode's own API"
+    ],
+    "1.3.0": [
+      "Rebuilt popup with two themes — Signal (dark) and Modernist (light)",
+      "New README design: badges plus stat panels that follow your GitHub theme",
+      "Fixed a broken badge that read \"404 badge not found\" on every problem",
+      "GitHub rate limits are now waited out instead of failing the push",
+      "Fine-grained tokens supported — scope access to a single repository",
+      "Fonts bundled locally, so the popup makes no network request to open",
+      "Download is 98% smaller: 191 KB instead of ~10 MB"
+    ],
     "1.1.0": [
       "📸 Solution Showcase Cards — share your solves as beautiful PNG images",
       "⚔️ Friend Battle System — add rivals, compare stats, weekly challenges",

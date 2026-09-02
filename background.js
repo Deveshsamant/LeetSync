@@ -7,6 +7,11 @@
    3. Maintaining the root README.md with a problem index
    ============================================================ */
 
+// Pure README/SVG generation lives in readme.js (unit tested in test/).
+// importScripts runs synchronously and shares this global scope, so the
+// generators are available to every function below.
+importScripts('readme.js');
+
 // ── Base64 Encoding (Unicode-safe) ───────────────────────────
 
 /**
@@ -23,11 +28,49 @@ function unicodeToBase64(str) {
   return btoa(binary);
 }
 
+/**
+ * Decode base64 from the GitHub API. atob alone mangles multi-byte
+ * characters, and GitHub wraps its base64 in newlines.
+ */
+function base64ToUnicode(b64) {
+  const raw = atob(String(b64 || '').replace(/\n/g, ''));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
 // ── GitHub API Helpers ───────────────────────────────────────
 
 /**
- * Make an authenticated GitHub API request.
+ * How long to wait before retrying a throttled GitHub response, or null when
+ * the response isn't a rate limit at all.
+ *
+ * GitHub signals throttling three ways: a Retry-After header (secondary
+ * limits, which writes to the same repo hit easily), x-ratelimit-remaining: 0
+ * with a reset timestamp (primary limit), or a 403 whose body mentions the
+ * secondary limit. Waits are capped at 60s because an MV3 service worker can
+ * be terminated while idling — beyond that it is better to fail with a clear
+ * message than to hang.
  */
+function rateLimitDelayMs(response) {
+  if (response.status !== 403 && response.status !== 429) return null;
+
+  const retryAfter = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter, 60) * 1000;
+  }
+
+  if (response.headers.get('x-ratelimit-remaining') === '0') {
+    const reset = Number(response.headers.get('x-ratelimit-reset'));
+    if (Number.isFinite(reset)) {
+      return Math.max(1000, Math.min(reset * 1000 - Date.now(), 60000));
+    }
+    return 5000;
+  }
+
+  return null;
+}
+
 async function githubAPI(endpoint, options = {}) {
   const settings = await chrome.storage.sync.get(['githubToken']);
   const token = settings.githubToken;
@@ -41,7 +84,7 @@ async function githubAPI(endpoint, options = {}) {
     : `https://api.github.com${endpoint}`;
 
   let response;
-  const maxRetries = 2; // 1 retry max — keeps verify fast
+  const maxRetries = 3; // one network retry, plus room to wait out a throttle
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -61,7 +104,6 @@ async function githubAPI(endpoint, options = {}) {
         },
       });
       clearTimeout(timeoutId);
-      break; // success
     } catch (fetchError) {
       const isTimeout = fetchError.name === 'AbortError';
       console.error(`[LeetSync] Fetch attempt ${attempt}/${maxRetries} failed:`, isTimeout ? 'Timeout' : fetchError.message);
@@ -71,7 +113,17 @@ async function githubAPI(endpoint, options = {}) {
           : `Network error: ${fetchError.message}`);
       }
       await new Promise(r => setTimeout(r, 800));
+      continue;
     }
+
+    // Throttled? Wait it out rather than surfacing a bare 403.
+    const wait = rateLimitDelayMs(response);
+    if (wait !== null && attempt < maxRetries) {
+      console.warn(`[LeetSync] Rate limited — retrying in ${Math.round(wait / 1000)}s`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    break;
   }
 
   if (!response.ok) {
@@ -82,6 +134,18 @@ async function githubAPI(endpoint, options = {}) {
       errorMsg = errorJson.message || errorBody;
     } catch {
       errorMsg = errorBody;
+    }
+
+    // A 403 is ambiguous: throttling, or a token without the right scope.
+    if (rateLimitDelayMs(response) !== null) {
+      const reset = Number(response.headers.get('x-ratelimit-reset'));
+      const when = Number.isFinite(reset)
+        ? ` Try again after ${new Date(reset * 1000).toLocaleTimeString()}.`
+        : ' Try again shortly.';
+      throw new Error(`GitHub rate limit reached.${when}`);
+    }
+    if (response.status === 403) {
+      throw new Error(`GitHub refused the request (403). Check the token has Contents: Read and write on this repository. ${errorMsg}`);
     }
     throw new Error(`GitHub API error (${response.status}): ${errorMsg}`);
   }
@@ -136,396 +200,17 @@ async function putFile(repo, path, content, message, sha = null) {
   }
 }
 
-// ── Language Mapping (duplicated from utils.js for service worker) ──
-
-const LANGUAGE_MAP = {
-  'python':      { ext: '.py',     name: 'Python'     },
-  'python3':     { ext: '.py',     name: 'Python'     },
-  'c':           { ext: '.c',      name: 'C'          },
-  'cpp':         { ext: '.cpp',    name: 'C++'        },
-  'java':        { ext: '.java',   name: 'Java'       },
-  'javascript':  { ext: '.js',     name: 'JavaScript' },
-  'typescript':  { ext: '.ts',     name: 'TypeScript' },
-  'csharp':      { ext: '.cs',     name: 'C#'         },
-  'go':          { ext: '.go',     name: 'Go'         },
-  'golang':      { ext: '.go',     name: 'Go'         },
-  'ruby':        { ext: '.rb',     name: 'Ruby'       },
-  'swift':       { ext: '.swift',  name: 'Swift'      },
-  'kotlin':      { ext: '.kt',     name: 'Kotlin'     },
-  'scala':       { ext: '.scala',  name: 'Scala'      },
-  'rust':        { ext: '.rs',     name: 'Rust'       },
-  'php':         { ext: '.php',    name: 'PHP'        },
-  'dart':        { ext: '.dart',   name: 'Dart'       },
-  'racket':      { ext: '.rkt',    name: 'Racket'     },
-  'erlang':      { ext: '.erl',    name: 'Erlang'     },
-  'elixir':      { ext: '.ex',     name: 'Elixir'     },
-  'mysql':       { ext: '.sql',    name: 'MySQL'      },
-  'mssql':       { ext: '.sql',    name: 'MS SQL'     },
-  'oraclesql':   { ext: '.sql',    name: 'Oracle SQL' },
-  'postgresql':  { ext: '.sql',    name: 'PostgreSQL' },
-  'pandas':      { ext: '.py',     name: 'Pandas'     },
-};
-
-function getLanguageInfo(lang) {
-  const key = (lang || '').toLowerCase().replace(/\s+/g, '');
-  return LANGUAGE_MAP[key] || { ext: '.txt', name: lang || 'Unknown' };
-}
-
-function slugify(title) {
-  return title.trim().replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
-}
-
-function padNumber(num) {
-  return String(num).padStart(4, '0');
-}
-
-function buildFolderName(num, title) {
-  return `${padNumber(num)}-${slugify(title)}`;
-}
-
-function difficultyBadge(difficulty) {
-  const colors = { 'Easy': '🟢', 'Medium': '🟡', 'Hard': '🔴' };
-  return `${colors[difficulty] || '⚪'} ${difficulty}`;
-}
-
-// ── README Generators ────────────────────────────────────────
-
-/**
- * Difficulty badge using shields.io
- */
-function difficultyShieldBadge(difficulty) {
-  const map = {
-    'Easy':   { label: 'Easy',   color: '00b8a3' },
-    'Medium': { label: 'Medium', color: 'ffa116' },
-    'Hard':   { label: 'Hard',   color: 'ef4743' },
-  };
-  const d = map[difficulty] || { label: difficulty, color: '888888' };
-  const encoded = encodeURIComponent(d.label);
-  return `![Difficulty](https://img.shields.io/badge/Difficulty-${encoded}-${d.color}?style=for-the-badge&labelColor=1a1a2e)`;
-}
-
-/**
- * Language badge using shields.io
- */
-function languageShieldBadge(language) {
-  const encoded = encodeURIComponent(language || 'Unknown');
-  return `![Language](https://img.shields.io/badge/Language-${encoded}-6c5ce7?style=for-the-badge&labelColor=1a1a2e&logo=code)`;
-}
-
-/**
- * Generate a text-based horizontal progress bar.
- * e.g. ▓▓▓▓▓▓▓░░░ 70%
- */
-function progressBar(value, total, width = 20) {
-  if (total === 0) return '░'.repeat(width) + ' 0%';
-  const filled = Math.round((value / total) * width);
-  const empty = width - filled;
-  const pct = Math.round((value / total) * 100);
-  return '▓'.repeat(filled) + '░'.repeat(empty) + ` ${pct}%`;
-}
-
-/**
- * Build per-problem README — clean, minimal, with badges + best stats.
- */
-function generateProblemReadme(problem) {
-  const {
-    number, title, difficulty, tags, description, url, language,
-    runtime, memory, solutionNumber, solutionLabel, bestRuntime,
-    bestMemory, isNewBestTime, isNewBestMemory, isFirstSolution,
-  } = problem;
-
-  const langInfo = getLanguageInfo(language || '');
-  const tagsList = (tags && tags.length)
-    ? tags.map(t => `\`${t}\``).join(' ')
-    : '`None`';
-  const date = new Date().toISOString().split('T')[0];
-  const solNum = solutionNumber || 1;
-
-  let c = '';
-
-  // ── Header ──
-  c += `<div align="center">\n\n`;
-  c += `# ${number}. ${title}\n\n`;
-  c += `${difficultyShieldBadge(difficulty)}\xa0\xa0`;
-  c += `${languageShieldBadge(langInfo.name)}\xa0\xa0`;
-  c += `![Solutions](https://img.shields.io/badge/Solutions-${solNum}-6c5ce7?style=for-the-badge&labelColor=1a1a2e)\xa0\xa0`;
-  c += `![Date](https://img.shields.io/badge/Date-${encodeURIComponent(date)}-0984e3?style=for-the-badge&labelColor=1a1a2e)\n\n`;
-  c += `[![LeetCode](https://img.shields.io/badge/View%20on-LeetCode-ffa116?style=flat-square&logo=leetcode&logoColor=ffa116)](${url})\n\n`;
-  c += `</div>\n\n`;
-  c += `---\n\n`;
-
-  // ── Tags ──
-  c += `## 🏷️ Topics\n\n`;
-  c += `${tagsList}\n\n`;
-
-  // ── Best Stats (updated across all attempts) ──
-  c += `## 🏆 Best Performance\n\n`;
-  c += `| Metric | This Attempt | All-time Best |\n`;
-  c += `|--------|:-----------:|:------------:|\n`;
-  const runtimeFlag = isNewBestTime  ? ' 🆕' : '';
-  const memoryFlag  = isNewBestMemory ? ' 🆕' : '';
-  c += `| ⚡ Runtime | ${runtime || 'N/A'} | **${bestRuntime || runtime || 'N/A'}**${runtimeFlag} |\n`;
-  c += `| 💾 Memory  | ${memory  || 'N/A'} | **${bestMemory  || memory  || 'N/A'}**${memoryFlag} |\n\n`;
-
-  if (isNewBestTime || isNewBestMemory) {
-    c += `> 🎉 **New personal best!** ${[isNewBestTime && 'Runtime', isNewBestMemory && 'Memory'].filter(Boolean).join(' & ')} improved!\n\n`;
-  }
-
-  // ── Solutions Index ──
-  c += `## 💡 Solutions (${solNum} total)\n\n`;
-  c += `| # | File | Language | Date |\n`;
-  c += `|:-:|------|:--------:|:----:|\n`;
-  // List all existing solutions up to current
-  for (let i = 1; i <= solNum; i++) {
-    const isThis = i === solNum;
-    const fname = `sol${i}${langInfo.ext}`;
-    const link = `[${fname}](./${fname})`;
-    const tag = isThis ? ' ← **latest**' : '';
-    c += `| ${i} | ${link} | \`${langInfo.name}\` | ${date}${tag} |\n`;
-  }
-  c += `\n`;
-  c += `---\n\n`;
-
-  // ── Problem Description ──
-  c += `## 📋 Problem Description\n\n`;
-  c += `${description}\n\n`;
-  c += `---\n\n`;
-
-  c += `<p align="right">\n`;
-  c += `  <sub>🤖 Auto-pushed by <a href="https://deveshsamant.in/">Devesh Samant</a>'s <strong>LeetSync</strong> extension</sub>\n`;
-  c += `</p>\n`;
-
-  return c;
-}
-
 /**
  * Build the root README — a stunning dashboard of all solved problems.
  */
 async function generateRootReadme(problems) {
   const themeData = await chrome.storage.sync.get(['readmeTheme']);
-  const theme = themeData.readmeTheme || 'dark-pro';
-  return README_THEMES[theme]?.(problems) || README_THEMES['dark-pro'](problems);
+  // Retired themes (dark-pro, clean-light, colorful, minimal, stats-heavy)
+  // fall back to dark.
+  const theme = README_THEMES[themeData.readmeTheme] ? themeData.readmeTheme : 'dark';
+  return README_THEMES[theme](problems);
 }
 
-// ── Theme: Dark Pro (original) ──
-const README_THEMES = {
-  'dark-pro': function(problems) {
-    const sorted = [...problems].sort((a, b) => a.number - b.number);
-    const total = sorted.length;
-    const today = new Date().toISOString().split('T')[0];
-    const counts = { Easy: 0, Medium: 0, Hard: 0 };
-    const langCount = {};
-    sorted.forEach(p => {
-      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
-      langCount[p.language] = (langCount[p.language] || 0) + 1;
-    });
-    const topLangs = Object.entries(langCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-    const totalBadge   = `![Problems](https://img.shields.io/badge/Total%20Solved-${total}-6c5ce7?style=for-the-badge&labelColor=1a1a2e)`;
-    const easyBadge    = `![Easy](https://img.shields.io/badge/Easy-${counts.Easy}-00b8a3?style=for-the-badge&labelColor=1a1a2e)`;
-    const mediumBadge  = `![Medium](https://img.shields.io/badge/Medium-${counts.Medium}-ffa116?style=for-the-badge&labelColor=1a1a2e)`;
-    const hardBadge    = `![Hard](https://img.shields.io/badge/Hard-${counts.Hard}-ef4743?style=for-the-badge&labelColor=1a1a2e)`;
-    const updatedBadge = `![Updated](https://img.shields.io/badge/Last%20Updated-${encodeURIComponent(today)}-0984e3?style=flat-square&labelColor=1a1a2e)`;
-    const autoSyncBadge = `![Auto](https://img.shields.io/badge/Auto--Synced%20by-LeetSync-ffa116?style=flat-square&logo=google-chrome&logoColor=white)`;
-
-    let c = '';
-    c += `<div align="center">\n\n`;
-    c += `<h1>⚡ LeetCode Solutions</h1>\n`;
-    c += `<p><em>Automatically synced with every accepted submission</em></p>\n\n`;
-    c += `${totalBadge} ${easyBadge} ${mediumBadge} ${hardBadge}\n\n`;
-    c += `${updatedBadge} ${autoSyncBadge}\n\n`;
-    c += `</div>\n\n`;
-    c += `---\n\n`;
-
-    c += `## 📊 Progress Dashboard\n\n`;
-    c += `\`\`\`\n`;
-    c += `  Total Solved   ${String(total).padStart(4)}  ${'█'.repeat(Math.min(total, 40))}\n\n`;
-    c += `  🟢 Easy       ${String(counts.Easy).padStart(4)}  ${progressBar(counts.Easy, total, 30)}\n`;
-    c += `  🟡 Medium     ${String(counts.Medium).padStart(4)}  ${progressBar(counts.Medium, total, 30)}\n`;
-    c += `  🔴 Hard       ${String(counts.Hard).padStart(4)}  ${progressBar(counts.Hard, total, 30)}\n`;
-    c += `\`\`\`\n\n`;
-
-    if (topLangs.length > 0) {
-      c += `## 🛠️ Languages Used\n\n`;
-      c += `\`\`\`\n`;
-      topLangs.forEach(([lang, cnt]) => {
-        c += `  ${lang.padEnd(14)} ${String(cnt).padStart(3)}  ${progressBar(cnt, total, 25)}\n`;
-      });
-      c += `\`\`\`\n\n`;
-    }
-
-    c += `## 🎯 Quick Stats\n\n`;
-    c += `| 📈 Stat | Value |\n|---------|-------|\n`;
-    c += `| Total Solved | **${total}** |\n`;
-    c += `| Easy | 🟢 ${counts.Easy} |\n| Medium | 🟡 ${counts.Medium} |\n| Hard | 🔴 ${counts.Hard} |\n`;
-    c += `| Languages | ${topLangs.map(([l]) => l).join(', ') || 'N/A'} |\n`;
-    c += `| Last Solved | ${sorted[sorted.length - 1]?.title || 'N/A'} |\n| Last Push | ${today} |\n\n`;
-    c += `---\n\n`;
-    c += buildProblemsTable(sorted, today);
-    c += buildFooter();
-    return c;
-  },
-
-  // ── Theme: Clean Light ──
-  'clean-light': function(problems) {
-    const sorted = [...problems].sort((a, b) => a.number - b.number);
-    const total = sorted.length;
-    const today = new Date().toISOString().split('T')[0];
-    const counts = { Easy: 0, Medium: 0, Hard: 0 };
-    sorted.forEach(p => { if (counts[p.difficulty] !== undefined) counts[p.difficulty]++; });
-
-    let c = '';
-    c += `# LeetCode Solutions\n\n`;
-    c += `> ${total} problems solved | Last updated: ${today}\n\n`;
-    c += `![Total](https://img.shields.io/badge/solved-${total}-blue?style=flat-square) `;
-    c += `![Easy](https://img.shields.io/badge/easy-${counts.Easy}-brightgreen?style=flat-square) `;
-    c += `![Medium](https://img.shields.io/badge/medium-${counts.Medium}-orange?style=flat-square) `;
-    c += `![Hard](https://img.shields.io/badge/hard-${counts.Hard}-red?style=flat-square)\n\n`;
-    c += `---\n\n`;
-    c += buildProblemsTable(sorted, today);
-    c += `\n---\n\n`;
-    c += `*Auto-synced by [LeetSync](https://github.com/Deveshsamant/LeetSync)*\n`;
-    return c;
-  },
-
-  // ── Theme: Colorful ──
-  'colorful': function(problems) {
-    const sorted = [...problems].sort((a, b) => a.number - b.number);
-    const total = sorted.length;
-    const today = new Date().toISOString().split('T')[0];
-    const counts = { Easy: 0, Medium: 0, Hard: 0 };
-    const langCount = {};
-    sorted.forEach(p => {
-      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
-      langCount[p.language] = (langCount[p.language] || 0) + 1;
-    });
-
-    let c = '';
-    c += `<div align="center">\n\n`;
-    c += `# 🌈 My LeetCode Journey 🚀\n\n`;
-    c += `### ✨ ${total} Problems Conquered! ✨\n\n`;
-    c += `![](https://img.shields.io/badge/🟢_Easy-${counts.Easy}-00b894?style=for-the-badge) `;
-    c += `![](https://img.shields.io/badge/🟡_Medium-${counts.Medium}-fdcb6e?style=for-the-badge) `;
-    c += `![](https://img.shields.io/badge/🔴_Hard-${counts.Hard}-e17055?style=for-the-badge)\n\n`;
-    c += `</div>\n\n`;
-
-    c += `## 🎮 Progress\n\n`;
-    c += `| 🏆 Milestone | Status |\n|---|---|\n`;
-    c += `| First 10 | ${total >= 10 ? '✅ Done!' : `⏳ ${total}/10`} |\n`;
-    c += `| First 25 | ${total >= 25 ? '✅ Done!' : `⏳ ${total}/25`} |\n`;
-    c += `| First 50 | ${total >= 50 ? '✅ Done!' : `⏳ ${total}/50`} |\n`;
-    c += `| First 100 | ${total >= 100 ? '✅ Done!' : `⏳ ${total}/100`} |\n`;
-    c += `| First 200 | ${total >= 200 ? '✅ Done!' : `⏳ ${total}/200`} |\n\n`;
-
-    c += `## 💻 Languages\n\n`;
-    Object.entries(langCount).sort((a, b) => b[1] - a[1]).forEach(([lang, cnt]) => {
-      const pct = Math.round((cnt / total) * 100);
-      c += `- **${lang}**: ${cnt} solutions (${pct}%) ${'🟩'.repeat(Math.ceil(pct / 10))}\n`;
-    });
-    c += `\n`;
-
-    c += `---\n\n`;
-    c += buildProblemsTable(sorted, today);
-    c += buildFooter();
-    return c;
-  },
-
-  // ── Theme: Minimal ──
-  'minimal': function(problems) {
-    const sorted = [...problems].sort((a, b) => a.number - b.number);
-    const today = new Date().toISOString().split('T')[0];
-
-    let c = `# LeetCode\n\n`;
-    c += `${sorted.length} solutions. Updated ${today}.\n\n`;
-    c += buildProblemsTable(sorted, today);
-    c += `\n---\n*Synced by LeetSync*\n`;
-    return c;
-  },
-
-  // ── Theme: Stats Heavy ──
-  'stats-heavy': function(problems) {
-    const sorted = [...problems].sort((a, b) => a.number - b.number);
-    const total = sorted.length;
-    const today = new Date().toISOString().split('T')[0];
-    const counts = { Easy: 0, Medium: 0, Hard: 0 };
-    const langCount = {};
-    const monthCount = {};
-    sorted.forEach(p => {
-      if (counts[p.difficulty] !== undefined) counts[p.difficulty]++;
-      langCount[p.language] = (langCount[p.language] || 0) + 1;
-      const month = p.date?.substring(0, 7) || 'unknown';
-      monthCount[month] = (monthCount[month] || 0) + 1;
-    });
-    const topLangs = Object.entries(langCount).sort((a, b) => b[1] - a[1]);
-
-    let c = '';
-    c += `<div align="center">\n\n`;
-    c += `# 📊 LeetCode Analytics\n\n`;
-    c += `![](https://img.shields.io/badge/Total-${total}-blueviolet?style=for-the-badge) `;
-    c += `![](https://img.shields.io/badge/Easy-${counts.Easy}-success?style=for-the-badge) `;
-    c += `![](https://img.shields.io/badge/Medium-${counts.Medium}-warning?style=for-the-badge) `;
-    c += `![](https://img.shields.io/badge/Hard-${counts.Hard}-critical?style=for-the-badge)\n\n`;
-    c += `</div>\n\n`;
-
-    c += `## 📈 Detailed Statistics\n\n`;
-    c += `\`\`\`\n`;
-    c += ` ┌──────────────────────────────────────────┐\n`;
-    c += ` │  DIFFICULTY DISTRIBUTION                  │\n`;
-    c += ` ├──────────────────────────────────────────┤\n`;
-    c += ` │  🟢 Easy    ${String(counts.Easy).padStart(3)}  ${progressBar(counts.Easy, total, 25)}  ${Math.round(counts.Easy/total*100)}% │\n`;
-    c += ` │  🟡 Medium  ${String(counts.Medium).padStart(3)}  ${progressBar(counts.Medium, total, 25)}  ${Math.round(counts.Medium/total*100)}% │\n`;
-    c += ` │  🔴 Hard    ${String(counts.Hard).padStart(3)}  ${progressBar(counts.Hard, total, 25)}  ${Math.round(counts.Hard/total*100)}% │\n`;
-    c += ` └──────────────────────────────────────────┘\n`;
-    c += `\`\`\`\n\n`;
-
-    c += `## 💻 Language Breakdown\n\n`;
-    c += `| Language | Count | % | Bar |\n|----------|:-----:|:-:|-----|\n`;
-    topLangs.forEach(([lang, cnt]) => {
-      const pct = Math.round((cnt / total) * 100);
-      c += `| ${lang} | ${cnt} | ${pct}% | ${'█'.repeat(Math.ceil(pct / 5))} |\n`;
-    });
-    c += `\n`;
-
-    c += `## 📅 Monthly Activity\n\n`;
-    c += `| Month | Solved |\n|-------|:------:|\n`;
-    Object.entries(monthCount).sort().reverse().slice(0, 6).forEach(([month, cnt]) => {
-      c += `| ${month} | ${cnt} ${'🟩'.repeat(Math.min(cnt, 10))} |\n`;
-    });
-    c += `\n`;
-
-    c += `---\n\n`;
-    c += buildProblemsTable(sorted, today);
-    c += buildFooter();
-    return c;
-  },
-};
-
-// ── Shared helpers for themes ──
-function buildProblemsTable(sorted, today) {
-  let c = `## 📚 All Solutions\n\n`;
-  c += `| # | Problem | Difficulty | Language | Date |\n`;
-  c += `|:---:|---------|:----------:|:--------:|:----:|\n`;
-  sorted.forEach(p => {
-    const num = p.number || parseInt(p.folderName?.match(/^(\d+)/)?.[1], 10) || '?';
-    const folder = p.folderName || buildFolderName(num, p.title);
-    const link = `[${p.title}](problems/${folder})`;
-    const diffEmoji = { Easy: '🟢', Medium: '🟡', Hard: '🔴' }[p.difficulty] || '⚪';
-    const diff = `${diffEmoji} ${p.difficulty}`;
-    const date = p.date || today;
-    c += `| ${num} | ${link} | ${diff} | \`${p.language}\` | ${date} |\n`;
-  });
-  c += `\n`;
-  return c;
-}
-
-function buildFooter() {
-  let c = `---\n\n`;
-  c += `<div align="center">\n\n`;
-  c += `<sub>🤖 Auto-synced by <strong>LeetSync</strong> Chrome Extension</sub>\n\n`;
-  c += `<sub>Built with ❤️ by <a href="https://deveshsamant.in/">Devesh Samant</a></sub>\n\n`;
-  c += `</div>\n`;
-  return c;
-}
 
 // ── Core Push Logic ──────────────────────────────────────────
 
@@ -646,6 +331,25 @@ async function pushToGitHub(problemData) {
   );
 
   console.log(`[LeetSync] ✅ Problem README pushed`);
+
+  // Panels the problem README's <picture> points at. Both themes ship so
+  // GitHub switches on the reader's setting. Failures here are logged and
+  // skipped: the README and solution matter more than its artwork.
+  await Promise.all(['light', 'dark'].map(async (themeName) => {
+    const panelPath = `${basePath}/${PROBLEM_SVG[themeName]}`;
+    try {
+      const existing = await getFile(repo, panelPath);
+      await putFile(
+        repo,
+        panelPath,
+        buildProblemSvg(enrichedProblemData, themeName),
+        `Update ${themeName} panel: ${number}. ${title}`,
+        existing?.sha || null
+      );
+    } catch (error) {
+      console.warn(`[LeetSync] Could not publish ${panelPath}:`, error.message);
+    }
+  }));
 
   // ── Step 4: Push the solution file ────────────────────────
   const solutionFileName = `${solutionLabel}${langInfo.ext}`;
@@ -796,6 +500,25 @@ async function updateRootReadme(repo, newProblem) {
     existingReadme?.sha || null
   );
 
+  // Step 6: Publish the light/dark stat panels the README's <picture> points
+  // at. Both always ship so GitHub can switch on the reader's system theme.
+  // A failure here must not lose the README push that already succeeded.
+  await Promise.all(['light', 'dark'].map(async (themeName) => {
+    const path = SVG_PATH[themeName];
+    try {
+      const existing = await getFile(repo, path);
+      await putFile(
+        repo,
+        path,
+        buildStatsSvg(problems, themeName),
+        `Update ${themeName} stat panels`,
+        existing?.sha || null
+      );
+    } catch (error) {
+      console.warn(`[LeetSync] Could not publish ${path}:`, error.message);
+    }
+  }));
+
   console.log(`[LeetSync] Root README updated with ${problems.length} total problems`);
 }
 
@@ -805,6 +528,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PUSH_TO_GITHUB') {
     pushToGitHub(message.data)
       .then((result) => {
+        // A successful push clears any recovery state the popup was showing.
+        chrome.storage.local.remove('lastPushError');
         // On success, also try processing any queued items
         processOfflineQueue().catch(() => {});
         sendResponse(result);
@@ -817,15 +542,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                                error.message.includes('network') ||
                                error.message.includes('timeout') ||
                                error.message.includes('aborted');
+        // 401/403 and rate limits are recoverable once the user reconnects, so
+        // the submission is queued rather than dropped.
+        const isAuthError = /\(401\)|\(403\)|rate limit|bad credentials/i.test(error.message);
+        const recoverable = isNetworkError || isAuthError;
+
+        if (recoverable) await addToOfflineQueue(message.data);
+
+        // Persisted so the popup can offer recovery instead of a bare message.
+        await chrome.storage.local.set({
+          lastPushError: {
+            message: error.message,
+            title: message.data?.title || null,
+            language: message.data?.language || null,
+            kind: isAuthError ? 'auth' : isNetworkError ? 'network' : 'other',
+            queued: recoverable,
+            at: new Date().toISOString(),
+          },
+        });
+
         if (isNetworkError) {
-          await addToOfflineQueue(message.data);
           sendResponse({
             success: false,
             queued: true,
             error: '📡 No connection — queued for later! Will auto-push when online.',
           });
         } else {
-          sendResponse({ success: false, error: error.message });
+          sendResponse({ success: false, error: error.message, queued: recoverable });
         }
       });
 
@@ -943,6 +686,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Retry queued pushes on demand — drives "Retry push" on the failure screen.
+  if (message.type === 'PROCESS_QUEUE') {
+    processOfflineQueue()
+      .then(async () => {
+        const data = await chrome.storage.local.get(['offlineQueue', 'lastPushError']);
+        const remaining = (data.offlineQueue || []).length;
+        sendResponse({ success: remaining === 0, remaining, error: data.lastPushError?.message || null });
+      })
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   // Create a new GitHub repo
   if (message.type === 'CREATE_REPO') {
     createGitHubRepo(message.repoName, message.isPrivate)
@@ -951,10 +706,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Find or create the solutions repo from the token alone
+  if (message.type === 'ENSURE_REPO') {
+    ensureRepo(message.repoName, message.isPrivate)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   // Get selected theme
   if (message.type === 'GET_THEME') {
     chrome.storage.sync.get(['readmeTheme'], (data) => {
-      sendResponse({ theme: data.readmeTheme || 'dark-pro' });
+      sendResponse({ theme: README_THEMES[data.readmeTheme] ? data.readmeTheme : 'dark' });
     });
     return true;
   }
@@ -1170,9 +933,10 @@ async function deleteSingleSolution(problemNumber, folderName, fileName) {
   const solvedProblems = local.solvedProblems || {};
   const problem = solvedProblems[problemNumber];
 
+  let remaining = 0;
+
   if (problem) {
-    const oldCount = problem.solutionCount || 1;
-    const newCount = oldCount - 1;
+    const newCount = (problem.solutionCount || 1) - 1;
 
     if (newCount <= 0) {
       // No more solutions → delete the whole problem
@@ -1181,12 +945,69 @@ async function deleteSingleSolution(problemNumber, folderName, fileName) {
 
     problem.solutionCount = newCount;
     solvedProblems[problemNumber] = problem;
+    remaining = newCount;
     const newPushCount = Math.max(0, (local.pushCount || 0) - 1);
     await chrome.storage.local.set({ solvedProblems, pushCount: newPushCount });
+
+    // Step 6: Deleting the file is only half the job — the problem's README
+    // still lists it and the root README still counts it. Both are refreshed
+    // so GitHub matches what is actually in the repo.
+    await refreshProblemReadme(repo, folderPath, problem, remaining);
+    await refreshRootReadme(
+      repo,
+      Object.values(solvedProblems),
+      `Delete ${fileName} from ${problemNumber}. ${problem.title}`
+    );
   }
 
   console.log(`[LeetSync] ✅ Solution ${fileName} deleted and renumbered`);
-  return { success: true, remaining: (problem?.solutionCount || 1) - 1 };
+  return { success: true, remaining };
+}
+
+/**
+ * Rewrite just the solutions index inside a problem's README.
+ *
+ * The README is patched rather than regenerated: the stored record carries no
+ * description or tags, so rebuilding it from scratch would throw away the
+ * problem statement.
+ */
+async function refreshProblemReadme(repo, folderPath, problem, remaining) {
+  const path = `${folderPath}/README.md`;
+  try {
+    const file = await getFile(repo, path);
+    if (!file) return;
+
+    const content = base64ToUnicode(file.content);
+    const langInfo = getLanguageInfo(problem.language);
+    const date = problem.date || new Date().toISOString().split('T')[0];
+    const section = buildSolutionsSection(remaining, langInfo, date).trimEnd();
+
+    // The trailing newline matters: without it the table butts straight up
+    // against the "---" rule, which Markdown reads as a setext heading.
+    const updated = content
+      .replace(/### SOLUTIONS \(\d+\)[\s\S]*?(?=\n---)/, `${section}\n`)
+      .replace(/badge\/SOLUTIONS-\d+-/, `badge/SOLUTIONS-${remaining}-`);
+
+    if (updated === content) return;
+    await putFile(
+      repo, path, updated,
+      `Update solutions index: ${problem.number}. ${problem.title}`,
+      file.sha
+    );
+  } catch (error) {
+    console.warn('[LeetSync] Could not refresh problem README:', error.message);
+  }
+}
+
+/** Rebuild the root README so its counts match the repo. */
+async function refreshRootReadme(repo, problems, message) {
+  try {
+    const content = await generateRootReadme(problems);
+    const existing = await getFile(repo, 'README.md');
+    await putFile(repo, 'README.md', content, message, existing?.sha || null);
+  } catch (error) {
+    console.warn('[LeetSync] Could not refresh root README:', error.message);
+  }
 }
 
 /**
@@ -1868,6 +1689,54 @@ async function checkAchievements() {
 // ══════════════════════════════════════════════════════════════
 // ── Repo Creation ────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
+
+/**
+ * Point the extension at a solutions repo using nothing but the token.
+ *
+ * Identifies the token's owner, then either adopts the repo if it already
+ * exists or creates it. The result is saved, so setup needs no repo name.
+ *
+ * A name may be given as "repo" or "owner/repo". Creating under a different
+ * owner is not possible with a user token, so that case reports rather than
+ * silently making the repo somewhere else.
+ */
+async function ensureRepo(requestedName, isPrivate = false) {
+  const me = await githubAPI('/user');
+  const login = me?.login;
+  if (!login) return { success: false, error: 'Could not identify the token owner.' };
+
+  const raw = (requestedName || '').trim().replace(/^\/+|\/+$/g, '') || 'leetcode-solutions';
+  const [maybeOwner, maybeRepo] = raw.includes('/') ? raw.split('/') : [login, raw];
+  const owner = maybeOwner || login;
+  const repoName = maybeRepo || 'leetcode-solutions';
+  const fullName = `${owner}/${repoName}`;
+
+  // Already there? Adopt it.
+  try {
+    const existing = await githubAPI(`/repos/${fullName}`);
+    await chrome.storage.sync.set({ githubRepo: existing.full_name });
+    return {
+      success: true,
+      created: false,
+      fullName: existing.full_name,
+      url: existing.html_url,
+      private: existing.private,
+    };
+  } catch (error) {
+    if (!error.message.includes('404')) throw error;   // real failure, not "absent"
+  }
+
+  if (owner !== login) {
+    return {
+      success: false,
+      error: `${fullName} does not exist, and this token can only create repositories under ${login}.`,
+    };
+  }
+
+  const created = await createGitHubRepo(repoName, isPrivate);
+  await chrome.storage.sync.set({ githubRepo: created.fullName });
+  return { ...created, created: true };
+}
 
 async function createGitHubRepo(repoName, isPrivate = false) {
   const response = await githubAPI('/user/repos', {

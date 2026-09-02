@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else {
       wizardOverlay.style.display = 'none';
-      mainPopup.style.display = 'block';
+      mainPopup.style.display = 'flex';
       tokenInput.value = data.githubToken;
       repoInput.value = data.githubRepo;
       setStatus('connected', 'Connected');
@@ -156,7 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
           modal.style.display = 'none';
           chrome.storage.local.set({ showWhatsNew: false });
         });
-        document.querySelector('.whatsnew-backdrop').addEventListener('click', () => {
+        // Clicking the overlay (but not the dialog inside it) dismisses.
+        modal.addEventListener('click', (event) => {
+          if (event.target !== modal) return;
           modal.style.display = 'none';
           chrome.storage.local.set({ showWhatsNew: false });
         });
@@ -175,12 +177,21 @@ document.addEventListener('DOMContentLoaded', () => {
     wizCurrentStep = step;
     chrome.storage.sync.set({ wizardStep: step });
     document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.wizard-dot').forEach((d, i) => {
-      d.classList.remove('active', 'done');
-      if (i + 1 < step) d.classList.add('done');
-      if (i + 1 === step) d.classList.add('active');
+
+    // Driven off data-step rather than DOM order, so reordering the dots
+    // cannot silently desynchronise them from the steps.
+    const dots = document.querySelectorAll('.wizard-dot');
+    dots.forEach(dot => {
+      const n = Number(dot.dataset.step);
+      dot.classList.toggle('done', n < step);
+      dot.classList.toggle('active', n === step);
     });
+
     document.getElementById(`wizStep${step}`).classList.add('active');
+
+    // The counter was static markup and never moved past "STEP 1 / 4".
+    const counter = document.querySelector('.wizard-step-count');
+    if (counter) counter.textContent = `STEP ${step} / ${dots.length}`;
   }
 
   document.getElementById('wizStart').addEventListener('click', () => wizGoTo(2));
@@ -237,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         chrome.storage.sync.set({ githubRepo: res.fullName }, () => {
           document.getElementById('wizRepoLink').innerHTML =
-            `<a href="${res.url}" target="_blank" style="color:var(--accent);font-size:13px;">📂 ${res.fullName}</a>`;
+            `<a href="${res.url}" target="_blank" style="color:var(--ac);font-size:13px;">📂 ${res.fullName}</a>`;
           wizGoTo(4);
           btn.disabled = false;
           btn.textContent = 'Finish Setup ✨';
@@ -254,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       chrome.storage.sync.set({ githubRepo: repo }, () => {
         document.getElementById('wizRepoLink').innerHTML =
-          `<a href="https://github.com/${repo}" target="_blank" style="color:var(--accent);font-size:13px;">📂 ${repo}</a>`;
+          `<a href="https://github.com/${repo}" target="_blank" style="color:var(--ac);font-size:13px;">📂 ${repo}</a>`;
         wizGoTo(4);
         btn.disabled = false;
         btn.textContent = 'Finish Setup ✨';
@@ -264,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('wizDone').addEventListener('click', () => {
     wizardOverlay.style.display = 'none';
-    mainPopup.style.display = 'block';
+    mainPopup.style.display = 'flex';
     chrome.storage.sync.remove('wizardStep');
     chrome.storage.sync.get(['githubToken', 'githubRepo'], (data) => {
       tokenInput.value = data.githubToken || '';
@@ -295,23 +306,51 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabContents = {
     dashboard: document.getElementById('tabDashboard'),
     problems: document.getElementById('tabProblems'),
+    sheets: document.getElementById('tabSheets'),
     settings: document.getElementById('tabSettings'),
     battle: document.getElementById('tabBattle'),
   };
 
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      tabBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      Object.values(tabContents).forEach(tc => tc.classList.remove('active'));
-      tabContents[tab].classList.add('active');
-
-      if (tab === 'problems') loadProblems();
-      if (tab === 'dashboard') loadDashboard();
-      if (tab === 'battle') loadBattle();
+  function switchTab(tab, moveFocus) {
+    if (!tabContents[tab]) return;
+    tabBtns.forEach(b => {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('active', on);
+      // Roving tabindex: only the selected tab is in the tab order, so Tab
+      // moves past the bar rather than through every tab in it.
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      if (on && moveFocus) b.focus();
     });
+    Object.entries(tabContents).forEach(([name, tc]) => tc.classList.toggle('active', name === tab));
+
+    if (tab === 'problems') loadProblems();
+    if (tab === 'dashboard') loadDashboard();
+    if (tab === 'battle') loadBattle();
+    if (tab === 'sheets') loadSheets();
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+
+  // Arrow keys move between tabs, Home/End jump to the ends — the pattern
+  // screen readers and keyboard users expect from a tablist.
+  document.querySelector('.tab-nav').addEventListener('keydown', (event) => {
+    const order = [...tabBtns];
+    const current = order.findIndex(b => b.dataset.tab === activeTabName());
+    let next = null;
+    if (event.key === 'ArrowRight') next = (current + 1) % order.length;
+    else if (event.key === 'ArrowLeft') next = (current - 1 + order.length) % order.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = order.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    switchTab(order[next].dataset.tab, true);
+  });
+
+  const activeTabName = () =>
+    Object.keys(tabContents).find(n => tabContents[n].classList.contains('active')) || 'dashboard';
 
   // ═══════════════════════════════════════════════════════════
   // ANIMATED COUNTER
@@ -354,6 +393,14 @@ document.addEventListener('DOMContentLoaded', () => {
       animateCounter(statPushCount, response.pushCount || 0);
       animateCounter(statSolvedCount, response.solvedCount || 0);
 
+      // Pushes beyond the first for each problem are re-submissions.
+      const pushSub = document.getElementById('statPushSub');
+      if (pushSub) {
+        const updates = Math.max(0, (response.pushCount || 0) - (response.solvedCount || 0));
+        pushSub.textContent = updates === 1 ? '1 update' : `${updates} updates`;
+      }
+      refreshSyncCard();
+
       if (response.lastPush) {
         const date = new Date(response.lastPush);
         const now = new Date();
@@ -380,6 +427,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * The header's six "health" bars are the last six days of real solve
+   * activity, scaled against the busiest of those days.
+   */
+  function renderHealthBars(solveCounts) {
+    const wrap = document.getElementById('healthBars');
+    if (!wrap) return;
+    const bars = wrap.querySelectorAll('span');
+
+    const days = [];
+    for (let i = bars.length - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(solveCounts[d.toISOString().split('T')[0]] || 0);
+    }
+
+    const peak = Math.max(...days);
+    bars.forEach((bar, i) => {
+      const n = days[i];
+      // 4px floor keeps empty days visible as a baseline tick
+      bar.style.height = (peak ? 4 + Math.round((n / peak) * 18) : 4) + 'px';
+      bar.className = n === 0 ? '' : (n === peak ? 'max' : 'on');
+    });
+    wrap.title = `Solves over the last 6 days: ${days.join(', ')}`;
+  }
+
   function loadDifficulty() {
     chrome.runtime.sendMessage({ type: 'GET_PROBLEMS' }, (res) => {
       if (chrome.runtime.lastError || !res?.success) return;
@@ -392,6 +465,14 @@ document.addEventListener('DOMContentLoaded', () => {
       diffEasyNum.textContent = easy;
       diffMedNum.textContent = med;
       diffHardNum.textContent = hard;
+
+      // Solved-this-month, derived from the stored problem dates.
+      const solvedSub = document.getElementById('statSolvedSub');
+      if (solvedSub) {
+        const month = new Date().toISOString().slice(0, 7);
+        const n = problems.filter(p => String(p.date || '').startsWith(month)).length;
+        solvedSub.textContent = n ? `↑ ${n} this month` : 'none this month';
+      }
 
       setTimeout(() => {
         diffEasyBar.style.width = `${(easy / total) * 100}%`;
@@ -414,6 +495,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Count solves per date
       const solveCounts = {};
       history.forEach(d => { solveCounts[d] = (solveCounts[d] || 0) + 1; });
+
+      renderHealthBars(solveCounts);
 
       // Generate last 91 days (13 weeks)
       const today = new Date();
@@ -450,22 +533,43 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Achievement definitions (mirrored from background.js)
+  // Monoline glyphs on a 24×24 grid, stroked not filled, so they inherit the
+  // theme accent and stay legible at 22px. Emoji rendered at the mercy of the
+  // platform font and never matched the rest of the UI.
+  const BADGE_ICONS = {
+    flag:    '<path d="M6 21V3"/><path d="M6 4.5h11l-2.6 3.5L17 11.5H6"/>',
+    flame:   '<path d="M12 3c3 3.8 5 6 5 9a5 5 0 0 1-10 0c0-2 .9-3.2 2-4.2.4 1.6 1.4 2.2 2 2.2.5-2-.6-4.8 1-7z"/>',
+    bolt:    '<path d="M13.5 3 5.5 14H11l-.5 7 8-11h-5.5z"/>',
+    crown:   '<path d="M4 8.5 7.5 12 12 5l4.5 7L20 8.5V18H4z"/>',
+    target:  '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/>',
+    medal:   '<circle cx="12" cy="14.5" r="5.5"/><path d="M9 3.5l2.2 5M15 3.5l-2.2 5"/>',
+    trophy:  '<path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0z"/><path d="M7.5 6H4.5v1.5A3 3 0 0 0 7.5 10.5M16.5 6h3v1.5a3 3 0 0 1-3 3"/><path d="M10 20h4M12 14v6"/>',
+    stack:   '<path d="M4 12.5 12 17l8-4.5M4 8 12 12.5 20 8M4 3.5 12 8l8-4.5"/>',
+    check:   '<circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4L15.6 10"/>',
+    half:    '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
+    shield:  '<path d="M12 3.2l8 3.4v5.6c0 4-3.4 6.5-8 8.1-4.6-1.6-8-4.1-8-8.1V6.6z"/>',
+    globe:   '<circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a12.5 12.5 0 0 1 0 16 12.5 12.5 0 0 1 0-16z"/>',
+    moon:    '<path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2z"/>',
+    sunrise: '<path d="M12 3.5v3M5.2 9.2l2 2M18.8 9.2l-2 2M3 18.5h18M7.2 18.5a4.8 4.8 0 0 1 9.6 0"/>',
+    layers:  '<path d="M4 7l8-3.2L20 7l-8 3.2z"/><path d="M4 12l8 3.2L20 12M4 16.6l8 3.2 8-3.2"/>',
+  };
+
   const BADGE_DEFS = [
-    { id: 'first_blood', emoji: '🩸', name: 'First Blood', desc: 'Solve your 1st problem' },
-    { id: 'on_fire', emoji: '🔥', name: 'On Fire', desc: '3-day solving streak' },
-    { id: 'unstoppable', emoji: '⚡', name: 'Unstoppable', desc: '7-day solving streak' },
-    { id: 'month_king', emoji: '👑', name: 'Month King', desc: '30-day solving streak' },
-    { id: 'deca', emoji: '🎯', name: 'Deca', desc: 'Solve 10 problems' },
-    { id: 'quarter', emoji: '🏅', name: 'Quarter Century', desc: 'Solve 25 problems' },
-    { id: 'half_century', emoji: '🥇', name: 'Half Century', desc: 'Solve 50 problems' },
-    { id: 'century', emoji: '💯', name: 'Century', desc: 'Solve 100 problems' },
-    { id: 'easy_rider', emoji: '🟢', name: 'Easy Rider', desc: 'Solve 10 Easy' },
-    { id: 'medium_rare', emoji: '🟡', name: 'Medium Rare', desc: 'Solve 10 Medium' },
-    { id: 'hard_core', emoji: '🔴', name: 'Hard Core', desc: 'Solve 5 Hard' },
-    { id: 'polyglot', emoji: '🌐', name: 'Polyglot', desc: 'Use 3+ languages' },
-    { id: 'night_owl', emoji: '🌙', name: 'Night Owl', desc: 'Solve after midnight' },
-    { id: 'early_bird', emoji: '☀️', name: 'Early Bird', desc: 'Solve before 7 AM' },
-    { id: 'bookworm', emoji: '📚', name: 'Bookworm', desc: 'Solve 5 in one day' },
+    { id: 'first_blood', icon: 'flag', name: 'First Blood', desc: 'Solve your 1st problem' },
+    { id: 'on_fire', icon: 'flame', name: 'On Fire', desc: '3-day solving streak' },
+    { id: 'unstoppable', icon: 'bolt', name: 'Unstoppable', desc: '7-day solving streak' },
+    { id: 'month_king', icon: 'crown', name: 'Month King', desc: '30-day solving streak' },
+    { id: 'deca', icon: 'target', name: 'Deca', desc: 'Solve 10 problems' },
+    { id: 'quarter', icon: 'medal', name: 'Quarter', desc: 'Solve 25 problems' },
+    { id: 'half_century', icon: 'trophy', name: 'Half Century', desc: 'Solve 50 problems' },
+    { id: 'century', icon: 'stack', name: 'Century', desc: 'Solve 100 problems' },
+    { id: 'easy_rider', icon: 'check', name: 'Easy Rider', desc: 'Solve 10 Easy' },
+    { id: 'medium_rare', icon: 'half', name: 'Medium Rare', desc: 'Solve 10 Medium' },
+    { id: 'hard_core', icon: 'shield', name: 'Hard Core', desc: 'Solve 5 Hard' },
+    { id: 'polyglot', icon: 'globe', name: 'Polyglot', desc: 'Use 3+ languages' },
+    { id: 'night_owl', icon: 'moon', name: 'Night Owl', desc: 'Solve after midnight' },
+    { id: 'early_bird', icon: 'sunrise', name: 'Early Bird', desc: 'Solve before 7 AM' },
+    { id: 'bookworm', icon: 'layers', name: 'Bookworm', desc: 'Solve 5 in one day' },
   ];
 
   function loadAchievements() {
@@ -475,17 +579,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const grid = document.getElementById('badgeGrid');
       grid.innerHTML = '';
 
-      BADGE_DEFS.forEach(def => {
-        const item = document.createElement('div');
+      let count = 0;
+      BADGE_DEFS.forEach((def, i) => {
         const isUnlocked = !!unlocked[def.id];
+        if (isUnlocked) count++;
+
+        const item = document.createElement('div');
         item.className = `badge-item ${isUnlocked ? 'unlocked' : 'locked'}`;
-        item.title = `${def.name}\n${def.desc}${isUnlocked ? '\n✅ Unlocked!' : '\n🔒 Locked'}`;
-        item.innerHTML = `
-          <span class="badge-emoji">${isUnlocked ? def.emoji : '🔒'}</span>
-          <span class="badge-name">${def.name}</span>
-        `;
+        item.title = `${def.name} — ${def.desc}${isUnlocked ? '' : ' (locked)'}`;
+        // Staggered so the row resolves rather than snapping in together.
+        if (isUnlocked) item.style.animationDelay = `${Math.min(i, 9) * 28}ms`;
+
+        item.innerHTML =
+          `<span class="badge-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" `
+          + `stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+          + `${BADGE_ICONS[def.icon] || BADGE_ICONS.target}</svg></span>`
+          + `<span class="badge-name"></span>`;
+        item.querySelector('.badge-name').textContent = def.name;
         grid.appendChild(item);
       });
+
+      const meter = document.getElementById('badgeCount');
+      if (meter) meter.textContent = `${count} / ${BADGE_DEFS.length}`;
     });
   }
 
@@ -511,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load README theme
     chrome.runtime.sendMessage({ type: 'GET_THEME' }, (data) => {
       if (chrome.runtime.lastError) return;
-      readmeThemeSelect.value = data?.theme || 'dark-pro';
+      readmeThemeSelect.value = data?.theme || 'dark';
     });
     // Load UI theme
     loadUITheme();
@@ -524,22 +639,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // EXTENSION UI THEME (cards)
   // ═══════════════════════════════════════════════════════════
+  const UI_THEMES = ['dark', 'light'];
+  const DEFAULT_UI_THEME = 'dark';
+
+  // Themes retired in the redesign (dark-pro, glassmorphic, gaming-arcade,
+  // cyberpunk, ocean, sakura) fall back to dark.
+  function normalizeUITheme(themeName) {
+    return UI_THEMES.includes(themeName) ? themeName : DEFAULT_UI_THEME;
+  }
+
   function applyUITheme(themeName) {
+    const theme = normalizeUITheme(themeName);
     // Remove all theme classes from body
     document.body.className = document.body.className
       .replace(/\btheme-\S+/g, '').trim();
-    if (themeName && themeName !== 'dark-pro') {
-      document.body.classList.add(`theme-${themeName}`);
+    // 'dark' is the :root baseline and needs no class
+    if (theme !== DEFAULT_UI_THEME) {
+      document.body.classList.add(`theme-${theme}`);
     }
     // Update active card
     document.querySelectorAll('.ui-theme-card').forEach(card => {
-      card.classList.toggle('active', card.dataset.uiTheme === themeName);
+      card.classList.toggle('active', card.dataset.uiTheme === theme);
     });
+    return theme;
   }
 
   function loadUITheme() {
     chrome.storage.sync.get(['uiTheme'], (data) => {
-      applyUITheme(data.uiTheme || 'dark-pro');
+      const stored = data.uiTheme;
+      const applied = applyUITheme(stored);
+      // Migrate anyone still on a retired theme so the choice persists
+      if (stored !== applied) chrome.storage.sync.set({ uiTheme: applied });
     });
   }
 
@@ -559,21 +689,59 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   const problemsList = document.getElementById('problemsList');
 
+  // Fetched once per tab visit, then filtered in place so typing does not
+  // hit the service worker on every keystroke.
+  let allProblems = [];
+  const problemFilters = { search: '', difficulty: 'all' };
+
   function loadProblems() {
-    problemsList.innerHTML = '<div class="problems-empty">Loading...</div>';
+    problemsList.innerHTML = '<div class="problems-empty">Loading…</div>';
 
     chrome.runtime.sendMessage({ type: 'GET_PROBLEMS' }, (response) => {
       if (chrome.runtime.lastError || !response?.success) {
         problemsList.innerHTML = '<div class="problems-empty">Failed to load</div>';
         return;
       }
-      renderProblems(response.problems);
+      allProblems = response.problems || [];
+      applyProblemFilters();
     });
   }
 
+  function applyProblemFilters() {
+    const { search, difficulty } = problemFilters;
+    const filtered = allProblems.filter(p => {
+      if (difficulty !== 'all'
+        && String(p.difficulty || '').toLowerCase() !== difficulty) return false;
+      if (!search) return true;
+      return String(p.title || '').toLowerCase().includes(search)
+        || String(p.number || '').includes(search);
+    });
+
+    if (allProblems.length && !filtered.length) {
+      problemsList.innerHTML =
+        '<div class="problems-empty">No solved problems match these filters.</div>';
+      return;
+    }
+    renderProblems(filtered);
+  }
+
+  document.getElementById('problemSearch').addEventListener('input', (event) => {
+    problemFilters.search = event.target.value.trim().toLowerCase();
+    applyProblemFilters();
+  });
+
+  document.querySelector('#tabProblems .filter-row').addEventListener('click', (event) => {
+    const chip = event.target.closest('.filter-chip');
+    if (!chip) return;
+    document.querySelectorAll('#tabProblems .filter-chip')
+      .forEach(c => c.classList.toggle('active', c === chip));
+    problemFilters.difficulty = chip.dataset.filter;
+    applyProblemFilters();
+  });
+
   function renderProblems(problems) {
     if (!problems || problems.length === 0) {
-      problemsList.innerHTML = '<div class="problems-empty">No problems synced yet. Go solve some! 🚀</div>';
+      problemsList.innerHTML = '<div class="problems-empty">Nothing synced yet — solve a problem on LeetCode to get started.</div>';
       return;
     }
 
@@ -598,11 +766,12 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="problem-actions">
-            <button class="problem-share" title="Share showcase card">📸</button>
             <button class="problem-toggle" title="View solutions">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
             </button>
-            <button class="problem-delete-all" title="Delete problem">🗑️</button>
+            <button class="problem-delete-all" title="Delete problem">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4.5h6V7"/></svg>
+            </button>
           </div>
         </div>
         <div class="solutions-panel" style="display:none;">
@@ -623,13 +792,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (expanded) {
           loadSolutions(p, panel, item);
         }
-      });
-
-      // Share showcase card
-      const shareBtn = item.querySelector('.problem-share');
-      shareBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openShowcaseModal(p);
       });
 
       // Delete entire problem
@@ -668,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
               item.remove();
               if (problemsList.children.length === 0) {
-                problemsList.innerHTML = '<div class="problems-empty">No problems synced yet. Go solve some! 🚀</div>';
+                problemsList.innerHTML = '<div class="problems-empty">Nothing synced yet — solve a problem on LeetCode to get started.</div>';
               }
             }, 300);
           } else {
@@ -710,7 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         solItem.innerHTML = `
           <div class="solution-info">
-            <span class="solution-icon">📄</span>
+            <span class="solution-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14,3 14,8 19,8"/></svg></span>
             <span class="solution-name">Solution ${displayNum}</span>
             <span class="solution-ext">${ext}</span>
           </div>
@@ -757,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   setTimeout(() => {
                     card.remove();
                     if (problemsList.children.length === 0) {
-                      problemsList.innerHTML = '<div class="problems-empty">No problems synced yet. Go solve some! 🚀</div>';
+                      problemsList.innerHTML = '<div class="problems-empty">Nothing synced yet — solve a problem on LeetCode to get started.</div>';
                     }
                   }, 300);
                 } else {
@@ -890,11 +1052,507 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // EXPORT / IMPORT
+  //
+  // Streak, achievements and sheet ticks exist only in this browser profile;
+  // "Restore from GitHub" rebuilds solved problems from the repo but not
+  // those. The token is deliberately excluded — a credential does not belong
+  // in a file people email themselves.
+  // ═══════════════════════════════════════════════════════════
+  const LOCAL_KEYS = ['solvedProblems', 'streakData', 'achievements', 'pushCount', 'lastPush'];
+  const SYNC_KEYS = ['githubRepo', 'uiTheme', 'readmeTheme', 'activeSheet', 'friends'];
+
+  function showDataMessage(text, type = 'info') {
+    const el = document.getElementById('dataMessage');
+    el.textContent = text;
+    el.className = `status-message status-${type}`;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 6000);
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    const [local, sync, ticks] = await Promise.all([
+      new Promise(r => chrome.storage.local.get(LOCAL_KEYS, d => r(d || {}))),
+      new Promise(r => chrome.storage.sync.get(SYNC_KEYS, d => r(d || {}))),
+      SheetProgress.load(),
+    ]);
+
+    // Pick the fields explicitly rather than trusting the query to have
+    // filtered. A credential must not be able to reach this file by accident.
+    const pick = (source, keys) => Object.fromEntries(
+      keys.filter(k => source?.[k] !== undefined).map(k => [k, source[k]])
+    );
+
+    const payload = {
+      app: 'leetsync',
+      version: chrome.runtime?.getManifest?.().version || 'unknown',
+      exportedAt: new Date().toISOString(),
+      local: pick(local, LOCAL_KEYS),
+      sync: pick(sync, SYNC_KEYS),
+      sheetTicks: [...ticks],
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `leetsync-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    const count = Object.keys(local.solvedProblems || {}).length;
+    showDataMessage(`Exported ${count} problems and ${payload.sheetTicks.length} sheet ticks.`, 'success');
+  });
+
+  document.getElementById('importBtn')
+    .addEventListener('click', () => document.getElementById('importFile').click());
+
+  document.getElementById('importFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';               // allow re-picking the same file
+    if (!file) return;
+
+    let payload;
+    try {
+      payload = JSON.parse(await file.text());
+    } catch {
+      return showDataMessage('That file is not valid JSON.', 'error');
+    }
+    if (payload?.app !== 'leetsync') {
+      return showDataMessage('That is not a LeetSync backup.', 'error');
+    }
+
+    // Merge rather than replace: an import must not wipe problems solved on
+    // this device since the backup was taken.
+    const current = await new Promise(r => chrome.storage.local.get(LOCAL_KEYS, d => r(d || {})));
+    const merged = {
+      ...payload.local,
+      solvedProblems: { ...(payload.local?.solvedProblems || {}), ...(current.solvedProblems || {}) },
+      pushCount: Math.max(payload.local?.pushCount || 0, current.pushCount || 0),
+    };
+
+    await new Promise(r => chrome.storage.local.set(merged, r));
+    if (payload.sync) {
+      const safe = { ...payload.sync };
+      delete safe.githubToken;             // never restore a credential
+      await new Promise(r => chrome.storage.sync.set(safe, r));
+    }
+    if (Array.isArray(payload.sheetTicks)) {
+      const ticks = await SheetProgress.load();
+      payload.sheetTicks.forEach(t => ticks.add(t));
+      await SheetProgress.save(ticks);
+    }
+
+    showDataMessage(
+      `Imported ${Object.keys(payload.local?.solvedProblems || {}).length} problems. Reopen the popup to see them.`,
+      'success'
+    );
+    loadDashboard();
+    loadProblems();
+  });
+
+  // Version comes from the manifest so About cannot drift from what shipped.
+  const aboutVersion = document.getElementById('aboutVersion');
+  if (aboutVersion && chrome.runtime?.getManifest) {
+    aboutVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // REPO AUTO-SETUP
+  //
+  // The token already identifies its owner, so the repo can be found or
+  // created without the user typing a name. background.js adopts it when it
+  // exists and creates it when it does not.
+  // ═══════════════════════════════════════════════════════════
+  function runRepoSetup(btn, idleLabel, opts, done) {
+    btn.disabled = true;
+    btn.textContent = 'Checking GitHub…';
+    chrome.runtime.sendMessage({ type: 'ENSURE_REPO', ...opts }, (res) => {
+      btn.disabled = false;
+      btn.textContent = idleLabel;
+      if (chrome.runtime.lastError || !res?.success) {
+        done(null, res?.error || chrome.runtime.lastError?.message || 'Could not reach GitHub.');
+        return;
+      }
+      done(res, null);
+    });
+  }
+
+  document.getElementById('autoRepoBtn').addEventListener('click', (event) => {
+    runRepoSetup(event.currentTarget, 'Detect or create automatically',
+      { repoName: repoInput.value.trim() },
+      (res, err) => {
+        if (err) return showMessage(err, 'error');
+        repoInput.value = res.fullName;
+        showMessage(
+          res.created
+            ? `Created <strong>${res.fullName}</strong>`
+            : `Using existing <strong>${res.fullName}</strong>`,
+          'success'
+        );
+        setStatus('connected', 'CONNECTED');
+      });
+  });
+
+  document.getElementById('wizAutoRepo').addEventListener('click', (event) => {
+    const wizError = document.getElementById('wizError');
+    wizError.style.display = 'none';
+    runRepoSetup(event.currentTarget, 'Set up automatically from my token',
+      {
+        repoName: document.getElementById('wizRepo').value.trim(),
+        isPrivate: document.getElementById('wizRepoPrivate').checked,
+      },
+      (res, err) => {
+        if (err) {
+          wizError.textContent = err;
+          wizError.style.display = 'block';
+          return;
+        }
+        document.getElementById('wizRepoLink').innerHTML =
+          `<a href="${res.url}" target="_blank" style="color:var(--ac);font-size:13px;">${res.fullName}</a>`;
+        wizGoTo(4);
+      });
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // STUDY SHEETS
+  //
+  // sheets.json is built by scripts/fetch-sheets.mjs from LeetCode's own
+  // APIs, so titles, slugs, difficulty and ids are authoritative. A question
+  // is ticked when its LeetCode id appears in the solved set, which is the
+  // same id background.js records on every push.
+  // ═══════════════════════════════════════════════════════════
+  const sheetPicker = document.getElementById('sheetPicker');
+  const sheetList = document.getElementById('sheetList');
+  let sheetData = null;
+  let solvedIds = new Set();
+  let manualDone = new Set();
+
+  function getSolvedIds() {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ type: 'GET_PROBLEMS' }, (res) => {
+        if (chrome.runtime.lastError || !res?.success) return resolve(new Set());
+        resolve(new Set((res.problems || []).map(p => Number(p.number)).filter(Boolean)));
+      });
+    });
+  }
+
+  // Ticks live in chrome.storage.sync via SheetProgress, chunked to stay
+  // under the 8 KB per-item cap, so they survive a reinstall.
+  const getManualDone = () => SheetProgress.load();
+
+  const manualKey = (sheetId, q) => `${sheetId}|${q.title}`;
+
+  // A popup is dismissed abruptly, so flush any debounced tick before it goes.
+  window.addEventListener('pagehide', () => SheetProgress.flush());
+
+  /** Auto-ticked from a real push, or ticked by hand for off-LeetCode rows. */
+  function isDone(sheetId, q) {
+    return (q.id != null && solvedIds.has(q.id)) || manualDone.has(manualKey(sheetId, q));
+  }
+
+  function questionUrl(q) {
+    return q.slug ? `https://leetcode.com/problems/${q.slug}/` : (q.url || null);
+  }
+
+  async function loadSheets() {
+    if (!sheetData) {
+      try {
+        // Bundled copy, upgraded to a newer published one when available.
+        sheetData = await SheetData.load();
+        if (!sheetData) throw new Error('no sheet data');
+      } catch (error) {
+        sheetList.innerHTML = '';
+        const p = document.createElement('div');
+        p.className = 'sheet-empty';
+        p.textContent = 'Could not load study sheets.';
+        sheetList.appendChild(p);
+        return;
+      }
+      sheetPicker.innerHTML = '';
+      sheetData.sheets.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} · ${s.count}`;
+        sheetPicker.appendChild(opt);
+      });
+      const saved = await new Promise(r => chrome.storage.sync.get(['activeSheet'], d => r(d.activeSheet)));
+      if (saved && sheetData.sheets.some(s => s.id === saved)) sheetPicker.value = saved;
+    }
+
+    [solvedIds, manualDone] = await Promise.all([getSolvedIds(), getManualDone()]);
+    renderSheet(sheetPicker.value);
+  }
+
+  function renderSheet(sheetId) {
+    const sheet = sheetData.sheets.find(s => s.id === sheetId) || sheetData.sheets[0];
+    if (!sheet) return;
+
+    const all = sheet.groups.flatMap(g => g.questions);
+    const done = all.filter(q => isDone(sheet.id, q)).length;
+    const pct = all.length ? Math.round((done / all.length) * 100) : 0;
+
+    document.getElementById('sheetDone').textContent = done;
+    document.getElementById('sheetTotal').textContent = all.length;
+    document.getElementById('sheetPct').textContent = `${pct}%`;
+    document.getElementById('sheetRemaining').textContent =
+      done === all.length ? 'complete' : `${all.length - done} to go`;
+    // Delayed so the width change animates rather than painting in place.
+    setTimeout(() => { document.getElementById('sheetBarFill').style.width = `${pct}%`; }, 60);
+
+    sheetList.innerHTML = '';
+    sheet.groups.forEach((group, index) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'sheet-group';
+
+      const head = document.createElement('div');
+      head.className = 'sheet-group-head';
+      const name = document.createElement('span');
+      name.className = 'sheet-group-name';
+      name.textContent = group.name;
+      const count = document.createElement('span');
+      count.className = 'sheet-group-count';
+      count.textContent = `${group.questions.filter(q => isDone(sheet.id, q)).length} / ${group.questions.length}`;
+      head.append(name, count);
+
+      const items = document.createElement('div');
+      items.className = 'sheet-items';
+
+      // Sheets run to 474 problems, so rows are built the first time a group
+      // is opened rather than all at once.
+      let built = false;
+      const build = () => {
+        if (built) return;
+        built = true;
+        group.questions.forEach(q => renderRow(items, sheet.id, q, count, group));
+      };
+      head.addEventListener('click', () => {
+        build();
+        wrap.classList.toggle('open');
+      });
+      if (index === 0) { build(); wrap.classList.add('open'); }
+
+      wrap.append(head, items);
+      sheetList.appendChild(wrap);
+    });
+  }
+
+  function renderRow(container, sheetId, q, countEl, group) {
+    const url = questionUrl(q);
+    const row = document.createElement('div');
+    row.className = 'sheet-item' + (isDone(sheetId, q) ? ' done' : '');
+
+    const tick = document.createElement('button');
+    tick.className = 'sheet-tick';
+    tick.type = 'button';
+    tick.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4,12.5 9.5,18 20,6.5"></polyline></svg>';
+    const auto = q.id != null && solvedIds.has(q.id);
+    tick.title = auto ? 'Synced from your solutions' : 'Mark as done';
+    tick.disabled = auto;
+    tick.addEventListener('click', () => {
+      const key = manualKey(sheetId, q);
+      if (manualDone.has(key)) manualDone.delete(key); else manualDone.add(key);
+      SheetProgress.schedule(manualDone);
+      row.classList.toggle('done', isDone(sheetId, q));
+      countEl.textContent =
+        `${group.questions.filter(x => isDone(sheetId, x)).length} / ${group.questions.length}`;
+      renderSheetTotals(sheetId);
+    });
+
+    const link = document.createElement(url ? 'a' : 'span');
+    link.className = 'sheet-link';
+    if (url) {
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+    }
+    link.title = `${q.title} · ${q.difficulty}`;
+
+    const num = document.createElement('span');
+    num.className = 'sheet-num';
+    num.textContent = q.id ?? '—';
+
+    const title = document.createElement('span');
+    title.className = 'sheet-title';
+    title.textContent = q.title;
+
+    const diff = document.createElement('span');
+    diff.className = `difficulty-badge difficulty-${q.difficulty.toLowerCase()}`;
+    diff.textContent = q.difficulty === 'Unknown' ? '?' : q.difficulty.slice(0, 1);
+
+    link.append(num, title, diff);
+    if (q.paid) {
+      const paid = document.createElement('span');
+      paid.className = 'sheet-paid';
+      paid.textContent = 'PRO';
+      link.appendChild(paid);
+    }
+    const open = document.createElement('span');
+    open.className = 'sheet-open';
+    open.textContent = url ? '↗' : '';
+    link.appendChild(open);
+
+    row.append(tick, link);
+    container.appendChild(row);
+  }
+
+  function renderSheetTotals(sheetId) {
+    const sheet = sheetData.sheets.find(s => s.id === sheetId);
+    if (!sheet) return;
+    const all = sheet.groups.flatMap(g => g.questions);
+    const done = all.filter(q => isDone(sheet.id, q)).length;
+    const pct = all.length ? Math.round((done / all.length) * 100) : 0;
+    document.getElementById('sheetDone').textContent = done;
+    document.getElementById('sheetPct').textContent = `${pct}%`;
+    document.getElementById('sheetRemaining').textContent =
+      done === all.length ? 'complete' : `${all.length - done} to go`;
+    document.getElementById('sheetBarFill').style.width = `${pct}%`;
+  }
+
+  sheetPicker.addEventListener('change', () => {
+    chrome.storage.sync.set({ activeSheet: sheetPicker.value });
+    renderSheet(sheetPicker.value);
+  });
+
+  /**
+   * The tracker opens as its own tab. Being an extension page it reads the
+   * same storage as the popup, so it stays in sync without any messaging.
+   */
+  function openTracker(sheetId) {
+    const url = chrome.runtime.getURL(`tracker.html${sheetId ? `#${sheetId}` : ''}`);
+    if (chrome.tabs?.create) chrome.tabs.create({ url });
+    else window.open(url, '_blank');
+  }
+
+  document.getElementById('sheetShowMore')
+    .addEventListener('click', () => openTracker(sheetPicker.value));
+
+  // The footer button had an id but no handler, so it did nothing.
+  document.getElementById('openDashboardBtn')
+    .addEventListener('click', () => openTracker());
+
+  // ═══════════════════════════════════════════════════════════
+  // SYNC FAILED SCREEN (design screen 04)
+  // ═══════════════════════════════════════════════════════════
+  const errorScreen = document.getElementById('errorScreen');
+
+  function hideErrorScreen(forget) {
+    errorScreen.style.display = 'none';
+    if (forget) chrome.storage.local.remove('lastPushError');
+  }
+
+  function showErrorScreen(err) {
+    const isAuth = err.kind === 'auth';
+    const isNet = err.kind === 'network';
+    const repo = (repoInput.value || '').trim() || 'your repository';
+
+    document.getElementById('errBadge').textContent = isAuth ? 'AUTH EXPIRED' : 'SYNC FAILED';
+    document.getElementById('errTitle').textContent = isAuth
+      ? 'GitHub authentication expired'
+      : isNet ? 'No connection to GitHub' : 'Push to GitHub failed';
+
+    document.getElementById('errDesc').innerHTML = isAuth
+      ? `Your personal access token was revoked or timed out, so the push to <strong>${repo}</strong> was rejected.`
+      : isNet
+        ? `LeetSync could not reach GitHub, so the push to <strong>${repo}</strong> did not complete.`
+        : `The push to <strong>${repo}</strong> did not complete.`;
+
+    const what = [err.title, err.language].filter(Boolean).join(' · ');
+    document.getElementById('errSafeLabel').textContent = err.queued
+      ? 'Nothing was lost'
+      : 'This submission was not saved';
+    document.getElementById('errQueued').textContent = err.queued
+      ? `${what || 'Your submission'} is queued locally and will push the moment you reconnect.`
+      : 'Re-submit on LeetCode once the problem below is resolved.';
+
+    const at = new Date(err.at);
+    document.getElementById('errCode').textContent =
+      `${err.message} · ${isNaN(at) ? '' : at.toLocaleTimeString()}`;
+
+    // Reconnecting is only the fix for an auth failure.
+    document.getElementById('errReconnect').style.display = isAuth ? '' : 'none';
+
+    errorScreen.style.display = 'flex';
+  }
+
+  chrome.storage.local.get(['lastPushError'], (data) => {
+    if (chrome.runtime.lastError || !data.lastPushError) return;
+    showErrorScreen(data.lastPushError);
+  });
+
+  document.getElementById('errReconnect').addEventListener('click', () => {
+    hideErrorScreen(false);
+    switchTab('settings');
+    tokenInput.focus();
+    tokenInput.select();
+  });
+
+  document.getElementById('errRetry').addEventListener('click', (event) => {
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Retrying…';
+    chrome.runtime.sendMessage({ type: 'PROCESS_QUEUE' }, (res) => {
+      btn.disabled = false;
+      if (chrome.runtime.lastError || !res?.success) {
+        btn.textContent = 'Retry push';
+        document.getElementById('errCode').textContent =
+          res?.error || chrome.runtime.lastError?.message || 'Still failing — check the token.';
+        return;
+      }
+      hideErrorScreen(true);
+      loadDashboard();
+      loadProblems();
+    });
+  });
+
+  document.getElementById('errDismiss').addEventListener('click', () => hideErrorScreen(true));
+
+  // ═══════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════
   function setStatus(type, text) {
     statusBadge.className = `status-badge status-${type}`;
     statusText.textContent = text;
+    refreshSyncCard(type);
+  }
+
+  /**
+   * Mirror the real connection state and repository into the dashboard's sync
+   * card, so it never displays a state the extension isn't actually in.
+   * Called with no argument to refresh the repo line only.
+   */
+  function refreshSyncCard(type) {
+    const state = document.getElementById('syncState');
+    const stateText = document.getElementById('syncStateText');
+    const repoName = document.getElementById('statRepoName');
+
+    if (state && stateText) {
+      const next = type || state.dataset.state || 'disconnected';
+      state.dataset.state = next;
+      stateText.textContent =
+        next === 'connected' ? 'Synchronized'
+          : next === 'syncing' ? 'Syncing…'
+            : 'Not connected';
+    }
+    const repo = (repoInput?.value || '').trim();
+    if (repoName) {
+      repoName.textContent = repo || 'No repository set';
+    }
+
+    // The row opens the repository on GitHub, but only once one is set —
+    // otherwise it stays inert rather than linking to a 404.
+    const row = document.getElementById('repoRow');
+    if (row) {
+      if (repo) {
+        row.href = /^https?:\/\//.test(repo)
+          ? repo
+          : `https://github.com/${repo.replace(/^\/+|\/+$/g, '')}`;
+        row.title = `Open ${repo} on GitHub`;
+      } else {
+        row.removeAttribute('href');
+        row.removeAttribute('title');
+      }
+    }
   }
 
   function showMessage(text, type = 'info') {
@@ -961,7 +1619,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderFriendCards(friends) {
     if (!friends || friends.length === 0) {
-      friendList.innerHTML = '<div class="problems-empty">No rivals yet. Add one above! ⚔️</div>';
+      friendList.innerHTML = '<div class="problems-empty">No rivals yet. Add a GitHub username above to compare progress.</div>';
       return;
     }
 
@@ -1087,247 +1745,5 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.floor(hrs / 24) + 'd ago';
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 📸 SHOWCASE CARD SYSTEM
-  // ═══════════════════════════════════════════════════════════
-  const showcaseModal = document.getElementById('showcaseModal');
-  const showcaseCanvas = document.getElementById('showcaseCanvas');
-  const showcaseClose = document.getElementById('showcaseClose');
-  const showcaseCopy = document.getElementById('showcaseCopy');
-  const showcaseDownload = document.getElementById('showcaseDownload');
-  let currentShowcaseProblem = null;
-
-  function openShowcaseModal(problem) {
-    currentShowcaseProblem = problem;
-    showcaseModal.style.display = 'flex';
-    renderShowcaseCard(problem);
-  }
-
-  function closeShowcaseModal() {
-    showcaseModal.style.display = 'none';
-    currentShowcaseProblem = null;
-  }
-
-  showcaseClose.addEventListener('click', closeShowcaseModal);
-  document.querySelector('.showcase-backdrop').addEventListener('click', closeShowcaseModal);
-
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
-
-  function renderShowcaseCard(p) {
-    const canvas = showcaseCanvas;
-    const ctx = canvas.getContext('2d');
-    const W = 600, H = 340;
-    const dpr = 2;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.scale(dpr, dpr);
-
-    const diffColors = {
-      Easy:   { main: '#00b8a3', bg: '#0a2e2a', glow: 'rgba(0,184,163,0.3)' },
-      Medium: { main: '#ffa116', bg: '#2e2210', glow: 'rgba(255,161,22,0.3)' },
-      Hard:   { main: '#ef4743', bg: '#2e1010', glow: 'rgba(239,71,67,0.3)' },
-    };
-    const diff = diffColors[p.difficulty] || diffColors.Easy;
-
-    // Background
-    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#0d1117');
-    bgGrad.addColorStop(0.5, '#161b22');
-    bgGrad.addColorStop(1, '#0d1117');
-    ctx.fillStyle = bgGrad;
-    roundRect(ctx, 0, 0, W, H, 16);
-    ctx.fill();
-
-    // Border
-    ctx.strokeStyle = diff.main;
-    ctx.lineWidth = 2;
-    roundRect(ctx, 1, 1, W - 2, H - 2, 16);
-    ctx.stroke();
-
-    // Top accent bar
-    ctx.fillStyle = diff.main;
-    ctx.fillRect(16, 0, W - 32, 4);
-
-    // Problem number badge
-    ctx.fillStyle = diff.bg;
-    roundRect(ctx, 24, 22, 70, 36, 8);
-    ctx.fill();
-    ctx.strokeStyle = diff.main + '60';
-    ctx.lineWidth = 1;
-    roundRect(ctx, 24, 22, 70, 36, 8);
-    ctx.stroke();
-    ctx.fillStyle = diff.main;
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('#' + p.number, 59, 46);
-
-    // Title
-    ctx.fillStyle = '#f0f6fc';
-    ctx.font = 'bold 20px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    const title = p.title.length > 28 ? p.title.substring(0, 26) + '...' : p.title;
-    ctx.fillText(title, 108, 48);
-
-    // Difficulty badge
-    const diffText = (p.difficulty || 'Easy').toUpperCase();
-    ctx.font = 'bold 11px Inter, sans-serif';
-    const diffW = ctx.measureText(diffText).width + 16;
-    ctx.fillStyle = diff.main + '20';
-    roundRect(ctx, 24, 70, diffW, 22, 4);
-    ctx.fill();
-    ctx.fillStyle = diff.main;
-    ctx.textAlign = 'left';
-    ctx.fillText(diffText, 32, 85);
-
-    // Language badge
-    if (p.language) {
-      ctx.fillStyle = 'rgba(139,148,158,0.15)';
-      const langW = ctx.measureText(p.language).width + 16;
-      roundRect(ctx, 28 + diffW, 70, langW, 22, 4);
-      ctx.fill();
-      ctx.fillStyle = '#8b949e';
-      ctx.fillText(p.language, 36 + diffW, 85);
-    }
-
-    // Motivational quote
-    const quotes = {
-      Easy: ['Clean solve! 🎯', 'Warmed up! 💪', 'Easy peasy! ✅'],
-      Medium: ['Nice grind! 🔥', 'Big brain move! 🧠', 'Level up! ⬆️'],
-      Hard: ['ABSOLUTE BEAST! 🐉', 'Galaxy brain! 🌌', 'Legendary! 👑'],
-    };
-    const quoteList = quotes[p.difficulty] || quotes.Easy;
-    const quote = quoteList[Math.floor(Math.random() * quoteList.length)];
-    ctx.fillStyle = diff.main;
-    ctx.font = 'bold 12px Inter, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(quote, W - 24, 48);
-
-    // Divider
-    ctx.strokeStyle = 'rgba(48,54,61,0.6)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(24, 106);
-    ctx.lineTo(W - 24, 106);
-    ctx.stroke();
-
-    // Stats boxes — hide runtime/memory when not available (synced cards)
-    const hasPerf = p.bestRuntime || p.bestMemory;
-    const stats = hasPerf
-      ? [
-          { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
-          { label: 'RUNTIME', value: p.bestRuntime ? p.bestRuntime + 'ms' : 'N/A', icon: '⚡' },
-          { label: 'MEMORY', value: p.bestMemory ? p.bestMemory + 'MB' : 'N/A', icon: '💾' },
-        ]
-      : [
-          { label: 'SOLUTIONS', value: String(p.solutionCount || 1), icon: '📝' },
-          { label: 'SOLVED', value: p.date || '—', icon: '📅' },
-        ];
-    const statW = (W - 48) / stats.length;
-    stats.forEach((s, i) => {
-      const x = 24 + i * statW;
-      ctx.fillStyle = 'rgba(22,27,34,0.8)';
-      roundRect(ctx, x + 4, 118, statW - 8, 72, 8);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(48,54,61,0.4)';
-      ctx.lineWidth = 1;
-      roundRect(ctx, x + 4, 118, statW - 8, 72, 8);
-      ctx.stroke();
-
-      ctx.font = '18px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#f0f6fc';
-      ctx.fillText(s.icon, x + statW / 2, 143);
-
-      ctx.fillStyle = '#f0f6fc';
-      ctx.font = 'bold 18px Inter, sans-serif';
-      // Shrink font for long date values
-      if (s.value.length > 6) ctx.font = 'bold 14px Inter, sans-serif';
-      ctx.fillText(s.value, x + statW / 2, 166);
-
-      ctx.fillStyle = '#484f58';
-      ctx.font = '600 9px Inter, sans-serif';
-      ctx.fillText(s.label, x + statW / 2, 181);
-    });
-
-    // Date (only show when we have performance data — otherwise it's already in the stats box)
-    if (hasPerf) {
-      ctx.fillStyle = '#484f58';
-      ctx.font = '11px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('Solved: ' + (p.date || 'Unknown'), 28, 216);
-    }
-
-    // Dot grid decoration
-    ctx.fillStyle = 'rgba(48,54,61,0.2)';
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 20; col++) {
-        ctx.beginPath();
-        ctx.arc(28 + col * 14, 236 + row * 14, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Bottom branding
-    const brandGrad = ctx.createLinearGradient(0, H - 50, 0, H);
-    brandGrad.addColorStop(0, 'rgba(13,17,23,0)');
-    brandGrad.addColorStop(1, 'rgba(13,17,23,0.95)');
-    ctx.fillStyle = brandGrad;
-    ctx.fillRect(0, H - 50, W, 50);
-
-    ctx.fillStyle = '#ffa116';
-    ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('⚡ LeetSync', 24, H - 16);
-
-    chrome.storage.sync.get(['githubRepo'], (data) => {
-      if (data.githubRepo) {
-        ctx.fillStyle = '#484f58';
-        ctx.font = '11px Inter, sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText('github.com/' + data.githubRepo, W - 24, H - 16);
-      }
-    });
-  }
-
-  // Copy card to clipboard
-  showcaseCopy.addEventListener('click', async () => {
-    try {
-      const blob = await new Promise(resolve => showcaseCanvas.toBlob(resolve, 'image/png'));
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Copied!';
-      setTimeout(() => {
-        showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Image';
-      }, 2000);
-    } catch (err) {
-      showcaseCopy.textContent = '❌ Failed';
-      setTimeout(() => {
-        showcaseCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy Image';
-      }, 2000);
-    }
-  });
-
-  // Download card as PNG
-  showcaseDownload.addEventListener('click', () => {
-    const p = currentShowcaseProblem;
-    if (!p) return;
-    const link = document.createElement('a');
-    link.download = 'leetsync-' + p.number + '-' + p.title.replace(/\s+/g, '-').toLowerCase() + '.png';
-    link.href = showcaseCanvas.toDataURL('image/png');
-    link.click();
-  });
 
 });

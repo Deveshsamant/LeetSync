@@ -16,3 +16,7 @@ node_modules/
 *.crx
 *.pem
 *.zip
+
+# Generated dev preview (scripts/make-preview.mjs)
+_preview-popup.html
+_preview-tracker.html

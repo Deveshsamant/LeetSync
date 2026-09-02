@@ -1,0 +1,155 @@
+/* ============================================================
+   theme.css — design tokens shared by the popup and the tracker.
+
+   Holds the bundled faces, both theme palettes and the design's motion.
+   Anything that must look identical in both surfaces belongs here; keeping
+   it in one file is what stops the two drifting apart.
+   ============================================================ */
+
+/* Bundled locally rather than fetched from Google Fonts: no network request on
+   popup open, correct typography offline, and nothing leaves the browser.
+   Each file is the latin-subset variable font covering the whole weight axis. */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('fonts/ibm-plex-sans.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('fonts/jetbrains-mono.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/archivo.woff2') format('woff2');
+}
+
+:root {
+  /* ── 1A · SIGNAL (dark) ── */
+  --bg:        #08090A;
+  --bg-band:   #0B0E10;
+  --bg-card:   #0E1214;
+  --bg-input:  #0A0D0F;
+  --bg-hover:  #12171A;
+  --bg-hover2: #1A2125;
+  --bg-chip:   #161C20;
+  --bg-chip-bd:#2A3237;
+
+  --bd:      #1F2529;
+  --bd-soft: #1A1F23;
+  --bd-hair: #161B1F;
+  --bd-ctrl: #242B30;
+  --bw: 1px;
+  --bw-band: 1px;
+
+  --tx:   #E9EDF0;
+  --tx-2: #C3CBD1;
+  --tx-3: #99A3AA;
+  --tx-4: #6B757C;
+  --tx-5: #525C63;
+
+  --ac:         #3FE08B;
+  --ac-hover:   #68EAA6;
+  --ac-ink:     #062012;
+  --ac-soft:    rgba(63, 224, 139, 0.10);
+  --ac-soft-bd: rgba(63, 224, 139, 0.28);
+
+  --easy: #3FE08B;
+  --med:  #E5B34A;
+  --hard: #F0736A;
+
+  --warn-bd:  #2A2418;
+  --warn-bg:  #151109;
+  --warn-tx:  #C9A85E;
+  --warn-dim: #8A7638;
+
+  --r-pop:  14px;
+  --r-card: 11px;
+  --r-btn:   9px;
+  --r-sm:    7px;
+  --r-xs:    5px;
+  --r-pill: 999px;
+
+  --f-body:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-label: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --lbl-size: 9.5px;
+  --lbl-ls: 0.1em;
+  --lbl-fw: 400;
+  --lbl-tt: none;
+
+  --pad-tab: 14px;
+  --card-gap: 12px;
+  --card-pad: 13px 15px 15px;
+}
+
+body.theme-light {
+  /* ── 1B · MODERNIST (light) ── */
+  --bg:        #f3f2f2;
+  --bg-band:   #f3f2f2;
+  --bg-card:   transparent;
+  --bg-input:  #eae9e9;
+  --bg-hover:  #eae9e9;
+  --bg-hover2: #dedbdb;
+  --bg-chip:   #eae9e9;
+  --bg-chip-bd:#201e1d;
+
+  --bd:      #201e1d;
+  --bd-soft: rgba(32, 30, 29, 0.4);
+  --bd-hair: rgba(32, 30, 29, 0.4);
+  --bd-ctrl: #201e1d;
+  --bw: 2px;
+  --bw-band: 2px;
+
+  --tx:   #201e1d;
+  --tx-2: #201e1d;
+  --tx-3: #605d5d;
+  --tx-4: #605d5d;
+  --tx-5: #9b9797;
+
+  --ac:         #ec3013;
+  --ac-hover:   #dd2b0f;
+  --ac-ink:     #f3f2f2;
+  --ac-soft:    #ffe0d9;
+  --ac-soft-bd: #ec3013;
+
+  --easy: #ec3013;
+  --med:  #605d5d;
+  --hard: #201e1d;
+
+  --warn-bd:  #201e1d;
+  --warn-bg:  #eae9e9;
+  --warn-tx:  #201e1d;
+  --warn-dim: #605d5d;
+
+  --r-pop: 0px; --r-card: 0px; --r-btn: 0px;
+  --r-sm: 0px;  --r-xs: 0px;   --r-pill: 0px;
+
+  --f-body:  Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-label: Archivo, system-ui, sans-serif;
+
+  --lbl-size: 11px;
+  --lbl-ls: 0.1em;
+  --lbl-fw: 600;
+  --lbl-tt: uppercase;
+
+  --pad-tab: 0px;
+  --card-gap: 0px;
+  --card-pad: 16px;
+}
+
+/* ── Motion (from the design) ── */
+@keyframes lsPulse { 0%, 100% { opacity: .3 } 50% { opacity: 1 } }
+@keyframes lsRise  { from { opacity: 0; transform: translateY(7px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes lsDraw  { to { stroke-dashoffset: 0 } }
+@keyframes lsSpin  { to { transform: rotate(360deg) } }
+@keyframes lsSweep { 0% { transform: translateX(-110%) } 100% { transform: translateX(360%) } }
+@keyframes lsPop   { 0% { transform: scale(.82); opacity: 0 } 60% { transform: scale(1.04) } 100% { transform: scale(1); opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important } }
