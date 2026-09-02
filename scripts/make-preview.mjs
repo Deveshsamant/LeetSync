@@ -22,6 +22,7 @@ const stub = `
     { number: 42, title: 'Trapping Rain Water', difficulty: 'Hard', language: 'C++', date: '2026-08-29' },
     { number: 55, title: 'Jump Game', difficulty: 'Medium', language: 'Java', date: '2026-08-28' }
   ];
+  const localStore = {};
   const store = { githubToken: 'ghp_preview', githubRepo: 'Deveshsamant/leetcode-solutions', uiTheme: 'dark' };
   const reply = {
     GET_PROBLEMS:     { success: true, problems: solved },
@@ -60,10 +61,19 @@ const stub = `
         set: (o, cb) => { Object.assign(store, o); setTimeout(() => cb && cb(), 0); },
         remove: (k, cb) => setTimeout(() => cb && cb(), 0)
       },
+      // Backed by a real in-memory object so consent and queue flows behave
+      // as they do in the extension.
       local: {
-        get: (k, cb) => setTimeout(() => cb({}), 0),
-        set: (o, cb) => setTimeout(() => cb && cb(), 0),
-        remove: (k, cb) => setTimeout(() => cb && cb(), 0)
+        get: (k, cb) => setTimeout(() => {
+          if (!k) return cb(localStore);
+          const keys = Array.isArray(k) ? k : [k];
+          cb(Object.fromEntries(keys.filter(x => x in localStore).map(x => [x, localStore[x]])));
+        }, 0),
+        set: (o, cb) => { Object.assign(localStore, o); setTimeout(() => cb && cb(), 0); },
+        remove: (k, cb) => {
+          (Array.isArray(k) ? k : [k]).forEach(x => delete localStore[x]);
+          setTimeout(() => cb && cb(), 0);
+        }
       }
     },
     tabs: { create: ({ url }) => window.open(url, '_blank') }

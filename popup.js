@@ -328,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tab === 'dashboard') loadDashboard();
     if (tab === 'battle') loadBattle();
     if (tab === 'sheets') loadSheets();
+    Analytics.track('tab', { detail: tab });
   }
 
   tabBtns.forEach(btn => {
@@ -680,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
     card.addEventListener('click', () => {
       const theme = card.dataset.uiTheme;
       applyUITheme(theme);
+      Analytics.track('theme', { detail: theme });
       chrome.storage.sync.set({ uiTheme: theme });
     });
   });
@@ -1052,6 +1054,34 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // USAGE REPORTING (opt-in)
+  // ═══════════════════════════════════════════════════════════
+  const analyticsToggle = document.getElementById('analyticsToggle');
+
+  function paintAnalyticsToggle(on) {
+    analyticsToggle.classList.toggle('on', on);
+    analyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+
+    // Shown only while reporting is on, so a deletion request can quote it.
+    const row = document.getElementById('analyticsIdRow');
+    row.style.display = on ? '' : 'none';
+    if (!on) return;
+    chrome.storage.local.get([Analytics.ID_KEY], (data) => {
+      document.getElementById('analyticsId').textContent = data?.[Analytics.ID_KEY] || '—';
+    });
+  }
+
+  Analytics.isEnabled().then(paintAnalyticsToggle);
+
+  analyticsToggle.addEventListener('click', async () => {
+    const next = !analyticsToggle.classList.contains('on');
+    await Analytics.setEnabled(next);
+    paintAnalyticsToggle(next);          // after setEnabled, so the id exists
+    // Recorded only when switching on — the off path must send nothing.
+    if (next) Analytics.track('theme', { detail: 'analytics_enabled' });
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // EXPORT / IMPORT
   //
   // Streak, achievements and sheet ticks exist only in this browser profile;
@@ -1101,6 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     URL.revokeObjectURL(url);
 
     const count = Object.keys(local.solvedProblems || {}).length;
+    Analytics.track('export');
     showDataMessage(`Exported ${count} problems and ${payload.sheetTicks.length} sheet ticks.`, 'success');
   });
 
@@ -1143,6 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await SheetProgress.save(ticks);
     }
 
+    Analytics.track('import');
     showDataMessage(
       `Imported ${Object.keys(payload.local?.solvedProblems || {}).length} problems. Reopen the popup to see them.`,
       'success'
@@ -1184,6 +1216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       (res, err) => {
         if (err) return showMessage(err, 'error');
         repoInput.value = res.fullName;
+        Analytics.track('repo_setup', { detail: res.created ? 'created' : 'existing' });
         showMessage(
           res.created
             ? `Created <strong>${res.fullName}</strong>`
@@ -1412,6 +1445,7 @@ document.addEventListener('DOMContentLoaded', () => {
   sheetPicker.addEventListener('change', () => {
     chrome.storage.sync.set({ activeSheet: sheetPicker.value });
     renderSheet(sheetPicker.value);
+    Analytics.track('sheet', { detail: sheetPicker.value });
   });
 
   /**
@@ -1419,6 +1453,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * same storage as the popup, so it stays in sync without any messaging.
    */
   function openTracker(sheetId) {
+    Analytics.track('tracker', { detail: sheetId || 'all' });
     const url = chrome.runtime.getURL(`tracker.html${sheetId ? `#${sheetId}` : ''}`);
     if (chrome.tabs?.create) chrome.tabs.create({ url });
     else window.open(url, '_blank');

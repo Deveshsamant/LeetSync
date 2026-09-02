@@ -10,7 +10,7 @@
 // Pure README/SVG generation lives in readme.js (unit tested in test/).
 // importScripts runs synchronously and shares this global scope, so the
 // generators are available to every function below.
-importScripts('readme.js');
+importScripts('readme.js', 'analytics.js');
 
 // ── Base64 Encoding (Unicode-safe) ───────────────────────────
 
@@ -530,6 +530,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then((result) => {
         // A successful push clears any recovery state the popup was showing.
         chrome.storage.local.remove('lastPushError');
+        Analytics.track('push_ok', {
+          slug: slugFromLeetCodeUrl(message.data?.url),
+          title: message.data?.title,
+          difficulty: message.data?.difficulty,
+          language: message.data?.language,
+        }).catch(() => {});
         // On success, also try processing any queued items
         processOfflineQueue().catch(() => {});
         sendResponse(result);
@@ -548,6 +554,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const recoverable = isNetworkError || isAuthError;
 
         if (recoverable) await addToOfflineQueue(message.data);
+
+        // Only the category, never the message: GitHub errors embed the
+        // repository path, which must not leave the device.
+        Analytics.track('push_fail', {
+          detail: isAuthError ? 'auth' : isNetworkError ? 'network' : 'other',
+          difficulty: message.data?.difficulty,
+          language: message.data?.language,
+        }).catch(() => {});
 
         // Persisted so the popup can offer recovery instead of a bare message.
         await chrome.storage.local.set({
@@ -684,6 +698,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ queueLength: queue.length, items: queue.map(q => ({ title: q.title, number: q.number, timestamp: q.timestamp })) });
     });
     return true;
+  }
+
+  // Usage event forwarded from the popup. The service worker owns the queue
+  // so there is only ever one writer; a no-op unless the user opted in.
+  if (message.type === 'TRACK') {
+    Analytics.track(message.event, message.fields || {}).catch(() => {});
+    return false;
   }
 
   // Retry queued pushes on demand — drives "Retry push" on the failure screen.
@@ -1496,6 +1517,10 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Set up alarms for periodic tasks
   chrome.alarms.create('processQueue', { periodInMinutes: 5 });
   chrome.alarms.create('streakReminder', { periodInMinutes: 60 });
+  chrome.alarms.create('flushAnalytics', { periodInMinutes: 30 });
+
+  // No-ops unless the user has opted in.
+  Analytics.track(details.reason === 'update' ? 'update' : 'install');
 });
 
 // Also re-inject when the service worker starts
@@ -1508,6 +1533,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === 'streakReminder') {
     checkStreakReminder();
+  }
+  if (alarm.name === 'flushAnalytics') {
+    Analytics.flush().catch(() => {});
   }
 });
 

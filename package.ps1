@@ -17,6 +17,7 @@ $files = @(
   'manifest.json',
   'background.js',
   'readme.js',        # loaded by background.js via importScripts
+  'analytics.js',     # loaded by background.js via importScripts
   'content.js',
   'injected.js',
   'utils.js',
@@ -41,8 +42,10 @@ foreach ($f in $files) {
 # Guard against the failure this script already shipped once: a file pulled in
 # with importScripts() is invisible to the manifest, so it is easy to leave out
 # of $files and only discover the breakage after upload.
-$imported = Select-String -Path '*.js' -Pattern "importScripts\('([^']+)'\)" -AllMatches |
-  ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+$imported = Select-String -Path '*.js' -Pattern "importScripts\(([^)]*)\)" -AllMatches |
+  ForEach-Object { $_.Matches } |
+  ForEach-Object { [regex]::Matches($_.Groups[1].Value, "'([^']+)'") } |
+  ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 foreach ($dep in $imported) {
   if ($files -notcontains $dep) {
     throw "importScripts('$dep') is used but '$dep' is not in the package file list."

@@ -432,6 +432,31 @@
           <button class="btn btn-primary" id="saveBtn" style="height:40px;">Save settings</button>
         </div>
 
+        <!-- Usage reporting -->
+        <div class="card">
+          <div class="sec-label" style="margin-bottom:10px;">USAGE REPORTING</div>
+          <div class="set-row" style="border-top:0;padding:6px 0;">
+            <span>Share usage data</span>
+            <button class="toggle-track" id="analyticsToggle" type="button"
+                    role="switch" aria-checked="false" aria-label="Share usage data">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <div class="form-hint" style="margin-top:8px;">
+            Off unless you turn it on. When on, LeetSync sends a random ID, the
+            extension version, which features you use, and the problems you push
+            — title, difficulty and language. It never sends your token,
+            repository, or GitHub username. Turning it off deletes the queue and
+            forgets the ID.
+            <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
+               target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
+          </div>
+          <div class="about-row" id="analyticsIdRow" style="display:none;">
+            <span>Your install ID</span>
+            <span class="about-version" id="analyticsId"></span>
+          </div>
+        </div>
+
         <!-- Data -->
         <div class="card">
           <div class="sec-label" style="margin-bottom:10px;">YOUR DATA</div>
@@ -521,6 +546,7 @@
 
 
   <script src="sheet-progress.js"></script>
+  <script src="analytics.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

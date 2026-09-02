@@ -5,7 +5,7 @@
    the service worker with importScripts(), which shares one global scope,
    so callers in background.js are unchanged.
    ============================================================ */
-// ── Language Mapping (duplicated from utils.js for service worker) ──
+// ── Language Mapping — the service worker cannot see the content script ──
 
 const LANGUAGE_MAP = {
   'python':      { ext: '.py',     name: 'Python'     },
@@ -43,6 +43,15 @@ const LANGUAGE_MAP = {
 function getLanguageInfo(lang) {
   const key = (lang || '').toLowerCase().replace(/\s+/g, '');
   return LANGUAGE_MAP[key] || { ext: '.txt', name: lang || 'Unknown' };
+}
+
+/**
+ * Pull the problem slug out of a LeetCode URL, or null if it is not one.
+ * Used for analytics, so it must never invent a value from an unexpected URL.
+ */
+function slugFromLeetCodeUrl(url) {
+  const m = /^https?:\/\/(?:www\.)?leetcode\.com\/problems\/([a-z0-9-]+)/i.exec(String(url || ''));
+  return m ? m[1].toLowerCase() : null;
 }
 
 function slugify(title) {
@@ -539,7 +548,7 @@ if (typeof module !== 'undefined' && module.exports) {
     shieldText, difficultyShieldBadge, languageShieldBadge,
     progressBar, slugify, padNumber, buildFolderName, getLanguageInfo,
     generateProblemReadme, buildStatsSvg, buildProblemSvg,
-    buildProblemsTable, buildFooter, buildSolutionsSection,
+    buildProblemsTable, buildFooter, buildSolutionsSection, slugFromLeetCodeUrl,
     README_THEMES, SVG_PATH, PROBLEM_SVG, SVG_THEME, DIFF_FILL,
   };
 }

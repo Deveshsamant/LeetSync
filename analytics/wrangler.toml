@@ -1,0 +1,9 @@
+name = "leetsync-analytics"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "leetsync-analytics"
+# Replace with the id printed by: npx wrangler d1 create leetsync-analytics
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
