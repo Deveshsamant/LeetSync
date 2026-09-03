@@ -1,10 +1,15 @@
 /**
- * Generates _preview-popup.html: the real popup with a stubbed chrome API
+ * Generates preview-popup.html: the real popup with a stubbed chrome API
  * injected ahead of popup.js, so the UI can be opened in a plain browser.
  *
- *   node scripts/make-preview.mjs   then open /_preview-popup.html
+ *   node scripts/make-preview.mjs   then open /preview-popup.html
  *
  * Derived from popup.html on every run, so it cannot drift. Not packaged.
+ *
+ * The names must NOT start with an underscore. Chrome reserves that prefix at
+ * the top level of an extension and refuses to load the whole extension if it
+ * finds one — "Could not load manifest" — which is a confusing way to discover
+ * that a dev-only preview file exists. test/wiring.test.js enforces this.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -91,5 +96,5 @@ function build(source, scriptTag, out) {
   console.log(`Wrote ${out}`);
 }
 
-build('popup.html', '<script src="popup.js"></script>', '_preview-popup.html');
-build('tracker.html', '<script src="tracker.js"></script>', '_preview-tracker.html');
+build('popup.html', '<script src="popup.js"></script>', 'preview-popup.html');
+build('tracker.html', '<script src="tracker.js"></script>', 'preview-tracker.html');

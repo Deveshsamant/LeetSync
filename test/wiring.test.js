@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
 
 /**
@@ -82,5 +82,27 @@ test('both pages load the scripts they depend on', () => {
     }
     assert.match(page.html, /<link rel="stylesheet" href="theme\.css">/,
       `${page.name} must load the shared tokens`);
+  }
+});
+
+test('no reserved underscore-prefixed files sit in the extension root', () => {
+  // Chrome reserves the "_" prefix at the top level of an extension and
+  // refuses to load the ENTIRE extension if it finds one, reporting only
+  // "Could not load manifest" — which points nowhere near the real cause.
+  // A generated dev preview once landed here and broke loading outright.
+  const root = join(__dirname, '..');
+  const offenders = readdirSync(root)
+    .filter(name => name.startsWith('_') && name !== '__pycache__');
+  assert.deepEqual(offenders, [],
+    `these break "Load unpacked" entirely: ${offenders.join(', ')}`);
+});
+
+test('the preview generator writes names Chrome will accept', () => {
+  const src = readFileSync(join(__dirname, '..', 'scripts', 'make-preview.mjs'), 'utf8');
+  const outputs = [...src.matchAll(/build\([^,]+,[^,]+,\s*'([^']+)'/g)].map(m => m[1]);
+  assert.ok(outputs.length, 'expected make-preview.mjs to declare its outputs');
+  for (const name of outputs) {
+    assert.ok(!name.startsWith('_'),
+      `make-preview.mjs writes "${name}" into the extension root, and a leading underscore stops Chrome loading the extension`);
   }
 });
