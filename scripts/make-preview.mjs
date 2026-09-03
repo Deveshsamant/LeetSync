@@ -28,7 +28,12 @@ const stub = `
     { number: 55, title: 'Jump Game', difficulty: 'Medium', language: 'Java', date: '2026-08-28' }
   ];
   const localStore = {};
-  const store = { githubToken: 'ghp_preview', githubRepo: 'Deveshsamant/leetcode-solutions', uiTheme: 'dark' };
+  // ?theme= and ?tab= let a capture script drive the preview without having
+  // to reach into the page. Defaults match a normal dev open.
+  const params = new URLSearchParams(location.search);
+  const wantTheme = params.get('theme') === 'light' ? 'light' : 'dark';
+  const wantTab = params.get('tab');
+  const store = { githubToken: 'ghp_preview', githubRepo: 'Deveshsamant/leetcode-solutions', uiTheme: wantTheme };
   const reply = {
     GET_PROBLEMS:     { success: true, problems: solved },
     GET_STATS:        { pushCount: 11, solvedCount: solved.length, lastPush: new Date(Date.now() - 43e6).toISOString() },
@@ -38,7 +43,7 @@ const stub = `
       medium_rare: true, night_owl: true, polyglot: true
     } },
     GET_QUEUE_STATUS: { queueLength: 0, items: [] },
-    GET_THEME:        { theme: 'dark' },
+    GET_THEME:        { theme: wantTheme },
     GET_SOLUTIONS:    { success: true, solutions: [] },
     ENSURE_REPO:      { success: true, created: false, fullName: 'Deveshsamant/leetcode-solutions',
                         url: 'https://github.com/Deveshsamant/leetcode-solutions', private: false }
@@ -83,6 +88,20 @@ const stub = `
     },
     tabs: { create: ({ url }) => window.open(url, '_blank') }
   };
+
+  // Select the requested tab once the popup has wired its own handlers, and
+  // flag readiness so a capture waits for paint rather than a fixed delay.
+  if (wantTab) {
+    window.addEventListener('load', () => setTimeout(() => {
+      const tab = document.querySelector(\`[data-tab="\${wantTab}"]\`);
+      if (tab) tab.click();
+      setTimeout(() => { document.documentElement.dataset.previewReady = '1'; }, 450);
+    }, 350));
+  } else {
+    window.addEventListener('load', () => setTimeout(() => {
+      document.documentElement.dataset.previewReady = '1';
+    }, 700));
+  }
 }());
 </script>
 `;
