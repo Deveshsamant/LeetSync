@@ -404,6 +404,7 @@ async function pushToGitHub(problemData) {
   const pushCount = (stats2.pushCount || 0) + 1;
   const solvedProblems = stats2.solvedProblems || {};
 
+  const previous = solvedProblems[number] || {};
   solvedProblems[number] = {
     number,
     title,
@@ -414,6 +415,15 @@ async function pushToGitHub(problemData) {
     solutionCount: nextSolNum,
     bestRuntime,
     bestMemory,
+    // Kept so the popup can group by topic and build a revision queue without
+    // re-fetching anything from LeetCode. `slug` is also what links a record
+    // back to its attempt log.
+    slug: problemData.titleSlug || previous.slug || null,
+    tags: Array.isArray(problemData.tags) ? problemData.tags : (previous.tags || []),
+    attempts: Number.isFinite(problemData.attempts) ? problemData.attempts : previous.attempts || 1,
+    // The first solve is what "not revisited since" is measured from, so it
+    // must survive later re-pushes of the same problem.
+    firstSolvedOn: previous.firstSolvedOn || new Date().toISOString().split('T')[0],
   };
 
   await chrome.storage.local.set({
@@ -503,17 +513,15 @@ async function updateRootReadme(repo, newProblem) {
   // Step 6: Publish the light/dark stat panels the README's <picture> points
   // at. Both always ship so GitHub can switch on the reader's system theme.
   // A failure here must not lose the README push that already succeeded.
-  await Promise.all(['light', 'dark'].map(async (themeName) => {
-    const path = SVG_PATH[themeName];
+  const panels = [];
+  for (const themeName of ['light', 'dark']) {
+    panels.push([SVG_PATH[themeName], buildStatsSvg(problems, themeName), `${themeName} stat panels`]);
+    panels.push([CAL_PATH[themeName], buildCalendarSvg(problems, themeName), `${themeName} solve calendar`]);
+  }
+  await Promise.all(panels.map(async ([path, content, label]) => {
     try {
       const existing = await getFile(repo, path);
-      await putFile(
-        repo,
-        path,
-        buildStatsSvg(problems, themeName),
-        `Update ${themeName} stat panels`,
-        existing?.sha || null
-      );
+      await putFile(repo, path, content, `Update ${label}`, existing?.sha || null);
     } catch (error) {
       console.warn(`[LeetSync] Could not publish ${path}:`, error.message);
     }

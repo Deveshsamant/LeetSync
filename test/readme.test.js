@@ -5,8 +5,9 @@ const {
   shieldText, difficultyShieldBadge, languageShieldBadge,
   progressBar, slugify, padNumber, buildFolderName, getLanguageInfo,
   generateProblemReadme, buildStatsSvg, buildProblemSvg, buildProblemsTable,
-  buildSolutionsSection,
-  README_THEMES, SVG_PATH, PROBLEM_SVG,
+  buildSolutionsSection, buildCalendarSvg,
+  README_THEMES, SVG_PATH, PROBLEM_SVG, CAL_PATH, LEETCODE_TOTALS,
+  FLAT_TABLE_LIMIT,
 } = require('../readme.js');
 
 const sample = [
@@ -248,4 +249,113 @@ test('problems table uses square difficulty swatches, not circles', () => {
 test('every solved problem appears in the table', () => {
   const table = buildProblemsTable(sample, '2026-09-02');
   for (const p of sample) assert.ok(table.includes(p.title), `${p.title} missing`);
+});
+
+
+// ── The solutions index has to stay readable as the repo grows ──
+
+/** n synthetic solutions spread across difficulties and days. */
+const manyProblems = (n) => Array.from({ length: n }, (_, i) => ({
+  number: i + 1,
+  title: `Problem ${i + 1}`,
+  difficulty: ['Easy', 'Medium', 'Hard'][i % 3],
+  language: 'C++',
+  date: `2026-0${(i % 9) + 1}-15`,
+}));
+
+test('a small repo keeps one flat table', () => {
+  const out = buildProblemsTable(manyProblems(10), '2026-09-03');
+  assert.equal(out.includes('<details>'), false,
+    'collapsing ten rows hides them for no benefit');
+  assert.equal((out.match(/^\| \d+ \|/gm) || []).length, 10);
+});
+
+test('a large repo collapses per difficulty instead of one endless table', () => {
+  const rows = manyProblems(FLAT_TABLE_LIMIT + 30);
+  const out = buildProblemsTable(rows, '2026-09-03');
+
+  // One <details> per difficulty present, and every row still in the file.
+  assert.equal((out.match(/<details>/g) || []).length, 3);
+  for (const level of ['Easy', 'Medium', 'Hard']) {
+    assert.match(out, new RegExp(`<strong>[^<]* ${level}</strong>`),
+      `missing the ${level} section`);
+  }
+  for (const row of rows) {
+    assert.ok(out.includes(`[${row.title}]`), `${row.title} fell out of the index`);
+  }
+  // Every <details> is closed, or GitHub swallows the rest of the README.
+  assert.equal((out.match(/<details>/g) || []).length,
+    (out.match(/<\/details>/g) || []).length);
+});
+
+test('the collapsed index leads with the newest solutions', () => {
+  const rows = manyProblems(FLAT_TABLE_LIMIT + 30);
+  const out = buildProblemsTable(rows, '2026-09-03');
+  const latest = out.slice(out.indexOf('**Latest'), out.indexOf('<details>'));
+  // 2026-09-15 is the newest date the generator produced.
+  assert.match(latest, /2026-09-15/);
+  assert.equal(latest.includes('2026-01-15'), false,
+    'the oldest rows must not be in the "latest" block');
+});
+
+// ── Difficulty denominators ──────────────────────────────────
+
+test('difficulty badges are shown against LeetCode totals', () => {
+  const md = README_THEMES.dark(sample);
+  // "1/895" has to be percent-encoded or shields.io reads it as a path.
+  assert.match(md, /EASY-1%2F895-/);
+  assert.match(md, /MEDIUM-1%2F1878-/);
+  assert.match(md, /HARD-1%2F843-/);
+  const all = LEETCODE_TOTALS.Easy + LEETCODE_TOTALS.Medium + LEETCODE_TOTALS.Hard;
+  assert.match(md, new RegExp(`3%2F${all}-`));
+});
+
+// ── Solve calendar ───────────────────────────────────────────
+
+test('the calendar renders a cell per elapsed day, never the future', () => {
+  const svg = buildCalendarSvg(sample, 'dark', '2026-09-03');
+  assert.match(svg, /^<svg /);
+  assert.match(svg, /<\/svg>$/);
+  const cells = (svg.match(/<rect /g) || []).length;
+  // 53 weeks of 7, minus the days after the end date, plus the background.
+  assert.ok(cells > 300 && cells <= 53 * 7 + 1, `unexpected cell count ${cells}`);
+  assert.equal(svg.includes('2026-09-04'), false, 'drew a day in the future');
+});
+
+test('the calendar marks the days that were solved on', () => {
+  const svg = buildCalendarSvg(sample, 'dark', '2026-09-03');
+  for (const p of sample) {
+    assert.ok(svg.includes(`${p.date}: 1 solved`), `${p.date} not marked`);
+  }
+  assert.match(svg, /3 active days/);
+});
+
+test('the calendar shades a busy day differently from a quiet one', () => {
+  const busy = [
+    { number: 1, title: 'a', difficulty: 'Easy', language: 'C++', date: '2026-09-01' },
+    { number: 2, title: 'b', difficulty: 'Easy', language: 'C++', date: '2026-09-01' },
+    { number: 3, title: 'c', difficulty: 'Easy', language: 'C++', date: '2026-09-01' },
+    { number: 4, title: 'd', difficulty: 'Easy', language: 'C++', date: '2026-09-02' },
+  ];
+  const svg = buildCalendarSvg(busy, 'dark', '2026-09-03');
+  assert.match(svg, /2026-09-01: 3 solved/);
+  assert.match(svg, /2026-09-02: 1 solved/);
+  assert.match(svg, /busiest 3 in a day/);
+});
+
+test('the calendar survives records with no usable date', () => {
+  const svg = buildCalendarSvg(
+    [{ number: 1, title: 'a', difficulty: 'Easy', language: 'C++', date: null },
+     { number: 2, title: 'b', difficulty: 'Easy', language: 'C++', date: 'not a date' }],
+    'dark', '2026-09-03');
+  assert.match(svg, /0 active days/);
+});
+
+test('both calendar themes are published and referenced', () => {
+  const md = README_THEMES.dark(sample);
+  assert.ok(md.includes(CAL_PATH.dark), 'README must point at the dark calendar');
+  assert.ok(md.includes(CAL_PATH.light), 'README must point at the light calendar');
+  for (const theme of ['light', 'dark']) {
+    assert.match(buildCalendarSvg(sample, theme, '2026-09-03'), /^<svg /);
+  }
 });

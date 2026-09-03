@@ -247,6 +247,90 @@
 
   // ── Submission Result Handling ─────────────────────────────
 
+  // ── Attempt log ────────────────────────────────────────────
+  //
+  // Per problem: how many times it was submitted before it went green, which
+  // verdicts came back, and when the problem was first opened. Kept on the
+  // device in chrome.storage.local, independent of usage reporting — this is
+  // what feeds "how it went" on the problem README and the revision queue in
+  // the popup, both of which are the user's own data.
+
+  const ATTEMPT_KEY = 'attemptLog';
+  const MAX_VERDICTS = 24;          // a long grind still ends up bounded
+  const ATTEMPT_TTL = 90 * 86400000; // forget problems untouched for a season
+
+  const readLog = () => new Promise((resolve) => {
+    try {
+      chrome.storage.local.get([ATTEMPT_KEY], (d) => resolve((d && d[ATTEMPT_KEY]) || {}));
+    } catch { resolve({}); }
+  });
+  const writeLog = (log) => new Promise((resolve) => {
+    try {
+      chrome.storage.local.set({ [ATTEMPT_KEY]: log }, resolve);
+    } catch { resolve(); }
+  });
+
+  /** Drop entries nothing has touched in a long time, so this cannot grow forever. */
+  function pruneLog(log) {
+    const cutoff = Date.now() - ATTEMPT_TTL;
+    for (const key of Object.keys(log)) {
+      const entry = log[key];
+      if (!entry || (entry.lastAt || entry.firstSeenAt || 0) < cutoff) delete log[key];
+    }
+    return log;
+  }
+
+  /**
+   * Called when a problem page opens. The timestamp is what makes
+   * time-to-solve possible, and it is only set once per problem so that
+   * revisiting does not restart the clock.
+   */
+  async function noteProblemOpened() {
+    const slug = getProblemSlug();
+    if (!slug) return;
+    const log = pruneLog(await readLog());
+    const entry = log[slug] || { attempts: 0, verdicts: [] };
+    if (!entry.firstSeenAt) entry.firstSeenAt = Date.now();
+    entry.lastAt = Date.now();
+    log[slug] = entry;
+    await writeLog(log);
+  }
+
+  /** Every submission counts, accepted or not. */
+  async function recordAttempt(status) {
+    const slug = getProblemSlug();
+    if (!slug) return null;
+    const log = pruneLog(await readLog());
+    const entry = log[slug] || { attempts: 0, verdicts: [], firstSeenAt: Date.now() };
+    entry.attempts = (entry.attempts || 0) + 1;
+    entry.verdicts = [...(entry.verdicts || []), status].slice(-MAX_VERDICTS);
+    entry.lastAt = Date.now();
+    log[slug] = entry;
+    await writeLog(log);
+    return entry;
+  }
+
+  /**
+   * The record for a solved problem, and the elapsed time since it was first
+   * opened. The entry itself is kept: re-solving later should still show the
+   * original struggle rather than starting from nothing.
+   */
+  async function attemptSummary() {
+    const slug = getProblemSlug();
+    if (!slug) return {};
+    const log = await readLog();
+    const entry = log[slug];
+    if (!entry) return {};
+    return {
+      attempts: entry.attempts || 1,
+      verdicts: entry.verdicts || [],
+      // Sent as a span, not a timestamp: the README wants "how long", and a
+      // wall-clock time of day is more than it needs to know.
+      firstSeenAt: entry.firstSeenAt ? Date.now() - entry.firstSeenAt : null,
+      solvedAt: Date.now(),
+    };
+  }
+
   // ── Usage reporting ────────────────────────────────────────
 
   /** "52 ms" -> 52. "N/A" and anything unparseable -> null. */
@@ -280,6 +364,9 @@
    */
   function trackSubmission(result) {
     if (!result) return;
+    // Local record first; it is the user's own data and does not wait on or
+    // depend on whether usage reporting is on.
+    recordAttempt(result.status_msg || 'Unknown').catch(() => {});
     const fields = {
       status: result.status_msg || 'Unknown',
       slug: getProblemSlug() || undefined,
@@ -393,6 +480,7 @@
         memory: memoryStr,
         submissionId: resultData.submission_id,
         timestamp: new Date().toISOString(),
+        ...(await attemptSummary()),
       };
 
       console.log('[LeetCode Pusher] Pushing:', problemData.number, problemData.title);
@@ -524,6 +612,7 @@
   // ── Initialization ─────────────────────────────────────────
 
   function init() {
+    noteProblemOpened().catch(() => {});
     if (!isExtensionContextValid()) {
       console.warn('[LeetSync] Extension context invalid on init — skipping setup.');
       showRefreshBanner();

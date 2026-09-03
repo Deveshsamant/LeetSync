@@ -119,11 +119,60 @@ function progressBar(value, total, width = 20) {
 /**
  * Build per-problem README — clean, minimal, with badges + best stats.
  */
+const VERDICT_MARK = {
+  'Accepted': '✅',
+  'Wrong Answer': '❌',
+  'Time Limit Exceeded': '⏱',
+  'Memory Limit Exceeded': '💾',
+  'Output Limit Exceeded': '📤',
+  'Runtime Error': '💥',
+  'Compile Error': '🔧',
+};
+
+/** "1 h 12 m" from a span of milliseconds, or null if it is not a real span. */
+function humanSpan(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const mins = Math.round(n / 60000);
+  if (mins < 1) return 'under a minute';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+/**
+ * How the solve actually went: how many attempts it took, in what order, and
+ * how long from first opening the problem to getting it accepted.
+ *
+ * Omitted entirely when there is nothing to say — a first-try solve with no
+ * recorded attempts should not get a section announcing "1 attempt".
+ */
+function buildAttemptsSection({ attempts, verdicts, firstSeenAt }) {
+  const total = Number(attempts);
+  const list = Array.isArray(verdicts) ? verdicts.filter(v => typeof v === 'string') : [];
+  const span = humanSpan(firstSeenAt);
+  if (!Number.isFinite(total) || total < 1) return '';
+  if (total === 1 && !span) return '';
+
+  let c = `### HOW IT WENT\n\n`;
+  c += `| | |\n|:--|:--|\n`;
+  c += `| **Attempts** | ${total === 1 ? 'first try' : `${total} before accepted`} |\n`;
+  if (span) c += `| **Time to solve** | ${span} |\n`;
+  if (list.length) {
+    // Oldest first, so the row reads as the story of the session.
+    const trail = list.slice(-12).map(v => `${VERDICT_MARK[v] || '•'} ${v}`).join(' → ');
+    c += `| **Verdicts** | ${trail} |\n`;
+  }
+  return c + `\n`;
+}
+
 function generateProblemReadme(problem) {
   const {
     number, title, difficulty, tags, description, url, language,
     runtime, memory, solutionNumber, solutionLabel, bestRuntime,
     bestMemory, isNewBestTime, isNewBestMemory, isFirstSolution,
+    attempts, verdicts, firstSeenAt,
   } = problem;
 
   const langInfo = getLanguageInfo(language || '');
@@ -161,6 +210,8 @@ function generateProblemReadme(problem) {
       .filter(Boolean).join(' and ');
     c += `> **New personal best** — ${improved} improved on this submission.\n\n`;
   }
+
+  c += buildAttemptsSection({ attempts, verdicts, firstSeenAt });
   c += `---\n\n`;
 
   // ── Solutions Index ──
@@ -358,6 +409,112 @@ const SVG_PATH = {
   dark: '.leetsync/stats-dark.svg',
 };
 
+const CAL_PATH = {
+  light: '.leetsync/calendar-light.svg',
+  dark: '.leetsync/calendar-dark.svg',
+};
+
+const CAL_WEEKS = 53;                 // a rolling year, like GitHub's own grid
+const CAL_CELL = 13;
+const CAL_GAP = 3;
+const CAL_LEFT = 30;                  // room for the weekday initials
+const CAL_TOP = 34;                   // room for the heading and month labels
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Midnight UTC for a YYYY-MM-DD string, or null if it is not one. */
+function utcDay(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(text || ''));
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/**
+ * A rolling-year solve grid, one cell per day, shaded by how many problems
+ * were solved that day.
+ *
+ * Dates are handled entirely in UTC. Building the grid off local time would
+ * put a solve in a different column depending on where the README is
+ * generated, and the stored dates are already UTC calendar days.
+ */
+function buildCalendarSvg(problems, themeName, endDate) {
+  const t = SVG_THEME[themeName] || SVG_THEME.dark;
+
+  const perDay = new Map();
+  for (const p of problems) {
+    const day = utcDay(p.date);
+    if (day === null) continue;
+    perDay.set(day, (perDay.get(day) || 0) + 1);
+  }
+
+  // The grid ends on the Saturday of the current week, so the last column is
+  // never a partial one that shifts every day.
+  const end = utcDay(endDate) ?? Date.UTC(
+    new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+  const endDow = new Date(end).getUTCDay();
+  const gridEnd = end + (6 - endDow) * 86400000;
+  const gridStart = gridEnd - (CAL_WEEKS * 7 - 1) * 86400000;
+
+  const step = CAL_CELL + CAL_GAP;
+  const W = CAL_LEFT + CAL_WEEKS * step + 10;
+  const H = CAL_TOP + 7 * step + 26;
+
+  const busiest = Math.max(1, ...perDay.values());
+  // Four shades, so a one-solve day and a five-solve day read differently.
+  const shade = (n) => {
+    if (!n) return t.track;
+    const level = Math.min(4, Math.ceil((n / busiest) * 4));
+    return { 1: 0.35, 2: 0.55, 3: 0.78, 4: 1 }[level] === 1
+      ? t.langFill
+      : `${t.langFill}${{ 1: '59', 2: '8c', 3: 'c7' }[level]}`;
+  };
+
+  let body = `<text x="0" y="14" font-family="system-ui,sans-serif" font-size="13"`
+    + ` font-weight="700" fill="${t.heading}">SOLVE ACTIVITY</text>`;
+
+  let solvedDays = 0;
+  let cells = '';
+  let monthLabels = '';
+  let lastMonth = -1;
+
+  for (let w = 0; w < CAL_WEEKS; w++) {
+    for (let d = 0; d < 7; d++) {
+      const day = gridStart + (w * 7 + d) * 86400000;
+      if (day > end) continue;                       // do not draw the future
+      const n = perDay.get(day) || 0;
+      if (n) solvedDays++;
+      const x = CAL_LEFT + w * step;
+      const y = CAL_TOP + d * step;
+      const iso = new Date(day).toISOString().slice(0, 10);
+      cells += `<rect x="${x}" y="${y}" width="${CAL_CELL}" height="${CAL_CELL}"`
+        + ` fill="${shade(n)}" rx="2"><title>${iso}: ${n} solved</title></rect>`;
+    }
+    // One label per month, at the week its 1st falls in.
+    const first = new Date(gridStart + w * 7 * 86400000);
+    if (first.getUTCMonth() !== lastMonth) {
+      lastMonth = first.getUTCMonth();
+      monthLabels += `<text x="${CAL_LEFT + w * step}" y="${CAL_TOP - 8}"`
+        + ` font-family="system-ui,sans-serif" font-size="9.5" fill="${t.pct}">`
+        + `${MONTHS[lastMonth]}</text>`;
+    }
+  }
+
+  let dowLabels = '';
+  for (const [d, label] of [[1, 'M'], [3, 'W'], [5, 'F']]) {
+    dowLabels += `<text x="0" y="${CAL_TOP + d * step + 10}"`
+      + ` font-family="system-ui,sans-serif" font-size="9.5" fill="${t.pct}">${label}</text>`;
+  }
+
+  const footer = `<text x="0" y="${H - 8}" font-family="system-ui,sans-serif"`
+    + ` font-size="10" fill="${t.pct}">${solvedDays} active day${solvedDays === 1 ? '' : 's'}`
+    + ` · ${problems.length} solved · busiest ${busiest} in a day</text>`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"`
+    + ` viewBox="0 0 ${W} ${H}" role="img" aria-label="Solve activity over the last year">`
+    + `<rect width="${W}" height="${H}" fill="${t.canvas}"/>`
+    + `${body}${monthLabels}${dowLabels}${cells}${footer}</svg>`;
+}
+
 // Per-problem panels sit beside the problem's own README.
 const PROBLEM_SVG = {
   light: 'panel-light.svg',
@@ -443,27 +600,48 @@ function buildProblemSvg(problem, themeName) {
     + `<rect width="${SVG_W}" height="${H}" fill="${t.canvas}"/>${body}</svg>`;
 }
 
+/**
+ * How many problems LeetCode publishes at each difficulty.
+ *
+ * A snapshot, not a live figure — it drifts upward as problems are added, and
+ * fetching it would cost a network call on every push. "45 / 895" still reads
+ * far better than a bare "45", and a stale denominator is off by a percent or
+ * so. Update here when it matters.
+ */
+const LEETCODE_TOTALS = { Easy: 895, Medium: 1878, Hard: 843 };
+const LEETCODE_TOTAL_ALL =
+  LEETCODE_TOTALS.Easy + LEETCODE_TOTALS.Medium + LEETCODE_TOTALS.Hard;
+
 /** Panels 1–2: title, subtitle and the four theme-independent badges. */
-function buildReadmeHeader(problems, fallback) {
+function buildReadmeHeader(problems, fallback, calFallback) {
   const total = problems.length;
   const counts = { Easy: 0, Medium: 0, Hard: 0 };
   problems.forEach(p => { if (counts[p.difficulty] !== undefined) counts[p.difficulty]++; });
 
+  // shieldText doubles "-" and "_" then percent-encodes, which is what keeps
+  // the "/" in "45/895" from splitting the badge path into a 404. Encoding it
+  // again here would ship a literal "%2F" as the badge text.
   const badge = (label, value, fill) =>
-    `![${label}](https://img.shields.io/badge/${encodeURIComponent(label.toUpperCase())}-${value}-${fill.slice(1)}?style=for-the-badge&labelColor=1a1a2e)`;
+    `![${label}](https://img.shields.io/badge/${encodeURIComponent(label.toUpperCase())}-${shieldText(String(value))}-${fill.slice(1)}?style=for-the-badge&labelColor=1a1a2e)`;
+  const outOf = (n, of) => `${n}/${of}`;
 
   let c = '';
   c += `<div align="center">\n\n`;
   c += `<h1>LeetCode Solutions</h1>\n`;
   c += `<p><em>Automatically synced with every accepted submission</em></p>\n\n`;
-  c += `${badge('Total Solved', total, DIFF_FILL.Total)} `;
-  c += `${badge('Easy', counts.Easy, DIFF_FILL.Easy)} `;
-  c += `${badge('Medium', counts.Medium, DIFF_FILL.Medium)} `;
-  c += `${badge('Hard', counts.Hard, DIFF_FILL.Hard)}\n\n`;
+  c += `${badge('Total Solved', outOf(total, LEETCODE_TOTAL_ALL), DIFF_FILL.Total)} `;
+  c += `${badge('Easy', outOf(counts.Easy, LEETCODE_TOTALS.Easy), DIFF_FILL.Easy)} `;
+  c += `${badge('Medium', outOf(counts.Medium, LEETCODE_TOTALS.Medium), DIFF_FILL.Medium)} `;
+  c += `${badge('Hard', outOf(counts.Hard, LEETCODE_TOTALS.Hard), DIFF_FILL.Hard)}\n\n`;
   c += `<picture>\n`;
   c += `  <source media="(prefers-color-scheme: dark)" srcset="${SVG_PATH.dark}">\n`;
   c += `  <source media="(prefers-color-scheme: light)" srcset="${SVG_PATH.light}">\n`;
   c += `  <img alt="Progress, languages and quick stats" src="${fallback}">\n`;
+  c += `</picture>\n\n`;
+  c += `<picture>\n`;
+  c += `  <source media="(prefers-color-scheme: dark)" srcset="${CAL_PATH.dark}">\n`;
+  c += `  <source media="(prefers-color-scheme: light)" srcset="${CAL_PATH.light}">\n`;
+  c += `  <img alt="Solve activity over the last year" src="${calFallback}">\n`;
   c += `</picture>\n\n`;
   c += `</div>\n\n`;
   return c;
@@ -472,7 +650,9 @@ function buildReadmeHeader(problems, fallback) {
 function buildRoot(problems, themeName) {
   const sorted = [...problems].sort((a, b) => a.number - b.number);
   const today = new Date().toISOString().split('T')[0];
-  let c = buildReadmeHeader(sorted, SVG_PATH[themeName] || SVG_PATH.dark);
+  let c = buildReadmeHeader(sorted,
+    SVG_PATH[themeName] || SVG_PATH.dark,
+    CAL_PATH[themeName] || CAL_PATH.dark);
   c += buildProblemsTable(sorted, today);
   c += buildFooter();
   return c;
@@ -507,27 +687,75 @@ function buildSolutionsSection(count, langInfo, date) {
   return c + `\n`;
 }
 
+/** One row of the solutions table. */
+function problemRow(p, today) {
+  const num = p.number || parseInt(p.folderName?.match(/^(\d+)/)?.[1], 10) || '?';
+  const folder = p.folderName || buildFolderName(num, p.title);
+  const link = `[${p.title}](problems/${folder})`;
+  // Square swatches, matching the design's 9px difficulty chips — the
+  // circles the old themes used are not part of this system.
+  const swatch = { Easy: '🟩', Medium: '🟧', Hard: '🟥' }[p.difficulty] || '⬜';
+  const diff = `${swatch} ${p.difficulty || '—'}`;
+  return `| ${num} | ${link} | ${diff} | \`${p.language}\` | ${p.date || today} |\n`;
+}
+
+const TABLE_HEAD =
+  `| # | Problem | Difficulty | Language | Date |\n`
+  + `|:---:|:--------|:----------:|:--------:|:----:|\n`;
+
+/** Past this many solutions a flat table stops being readable. */
+const FLAT_TABLE_LIMIT = 40;
+const RECENT_COUNT = 10;
+
+/**
+ * The solutions index.
+ *
+ * A flat table is fine while the repo is small, but it grows by one row per
+ * push forever, and at a few hundred it is a wall nobody scrolls. Past
+ * FLAT_TABLE_LIMIT this switches to the most recent solutions up front and
+ * collapsed <details> per difficulty — which GitHub renders natively, so the
+ * whole list is still one click away and still searchable in the raw file.
+ */
 function buildProblemsTable(sorted, today) {
-  // Heading follows the design's panel headings — centred and uppercase —
-  // and the rule above it stands in for the design's 2px section divider.
   let c = `---\n\n`;
   c += `<div align="center">\n\n`;
   c += `### ALL SOLUTIONS\n\n`;
   c += `</div>\n\n`;
-  c += `| # | Problem | Difficulty | Language | Date |\n`;
-  c += `|:---:|:--------|:----------:|:--------:|:----:|\n`;
-  sorted.forEach(p => {
-    const num = p.number || parseInt(p.folderName?.match(/^(\d+)/)?.[1], 10) || '?';
-    const folder = p.folderName || buildFolderName(num, p.title);
-    const link = `[${p.title}](problems/${folder})`;
-    // Square swatches, matching the design's 9px difficulty chips — the
-    // circles the old themes used are not part of this system.
-    const swatch = { Easy: '🟩', Medium: '🟧', Hard: '🟥' }[p.difficulty] || '⬜';
-    const diff = `${swatch} ${p.difficulty || '—'}`;
-    const date = p.date || today;
-    c += `| ${num} | ${link} | ${diff} | \`${p.language}\` | ${date} |\n`;
-  });
+
+  if (sorted.length <= FLAT_TABLE_LIMIT) {
+    c += TABLE_HEAD;
+    sorted.forEach(p => { c += problemRow(p, today); });
+    return c + `\n`;
+  }
+
+  // Newest first, by date then number — the rows a visitor actually wants.
+  const recent = [...sorted]
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || b.number - a.number)
+    .slice(0, RECENT_COUNT);
+
+  c += `**Latest ${recent.length}**\n\n`;
+  c += TABLE_HEAD;
+  recent.forEach(p => { c += problemRow(p, today); });
   c += `\n`;
+
+  for (const level of ['Easy', 'Medium', 'Hard']) {
+    const rows = sorted.filter(p => p.difficulty === level);
+    if (!rows.length) continue;
+    const swatch = { Easy: '🟩', Medium: '🟧', Hard: '🟥' }[level];
+    c += `<details>\n<summary><strong>${swatch} ${level}</strong> — ${rows.length} solved</summary>\n\n`;
+    c += TABLE_HEAD;
+    rows.forEach(p => { c += problemRow(p, today); });
+    c += `\n</details>\n\n`;
+  }
+
+  const rest = sorted.filter(p => !['Easy', 'Medium', 'Hard'].includes(p.difficulty));
+  if (rest.length) {
+    c += `<details>\n<summary><strong>⬜ Uncategorised</strong> — ${rest.length}</summary>\n\n`;
+    c += TABLE_HEAD;
+    rest.forEach(p => { c += problemRow(p, today); });
+    c += `\n</details>\n\n`;
+  }
+
   return c;
 }
 
@@ -550,5 +778,7 @@ if (typeof module !== 'undefined' && module.exports) {
     generateProblemReadme, buildStatsSvg, buildProblemSvg,
     buildProblemsTable, buildFooter, buildSolutionsSection, slugFromLeetCodeUrl,
     README_THEMES, SVG_PATH, PROBLEM_SVG, SVG_THEME, DIFF_FILL,
+    buildCalendarSvg, CAL_PATH, LEETCODE_TOTALS,
+    buildProblemsTable, FLAT_TABLE_LIMIT,
   };
 }
