@@ -123,10 +123,15 @@ async function summary(env, days) {
       all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
                        MIN(ts) AS first_seen, MAX(ts) AS last_seen
                 FROM events WHERE ts >= ?`, since),
+      // Days are bucketed in UTC, which the dashboard says out loud rather
+      // than quietly mixing them with the viewer's local clock.
       all(env, `SELECT date(ts/1000,'unixepoch') AS day,
                        COUNT(DISTINCT install_id) AS installs, COUNT(*) AS events,
                        SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
-                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                       SUM(CASE WHEN event='push_fail' THEN 1 ELSE 0 END) AS failures,
+                       COUNT(DISTINCT slug) AS problems
                 FROM events WHERE ts >= ? GROUP BY day ORDER BY day`, since),
       all(env, `SELECT event, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
                 FROM events WHERE ts >= ? GROUP BY event ORDER BY n DESC`, since),
@@ -253,6 +258,61 @@ async function activity(env, days, limit) {
   return { days, generatedAt: Date.now(), rows };
 }
 
+/**
+ * Everything that happened on one UTC day.
+ *
+ * `date` is compared against the same date() expression the daily series is
+ * grouped by, so a row shown in the chart and a row shown here can never
+ * disagree about which day it belongs to.
+ */
+async function dayDetail(env, date) {
+  const D = `date(ts/1000,'unixepoch') = ?`;
+
+  const [totals, hourly, statuses, problems, languages, installs, difficulty] =
+    await Promise.all([
+      all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
+                       COUNT(DISTINCT slug) AS problems,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                       SUM(CASE WHEN event='push_fail' THEN 1 ELSE 0 END) AS failures
+                FROM events WHERE ${D}`, date),
+      all(env, `SELECT strftime('%H', ts/1000, 'unixepoch') AS hour, COUNT(*) AS n,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted
+                FROM events WHERE ${D} GROUP BY hour ORDER BY hour`, date),
+      all(env, `SELECT status, COUNT(*) AS n FROM events
+                WHERE ${D} AND event='submission' AND status IS NOT NULL
+                GROUP BY status ORDER BY n DESC`, date),
+      all(env, `SELECT slug, MAX(title) AS title, MAX(difficulty) AS difficulty,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS attempts,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                       COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ${D} AND slug IS NOT NULL
+                GROUP BY slug ORDER BY attempts DESC, pushes DESC LIMIT 50`, date),
+      all(env, `SELECT language, COUNT(*) AS n FROM events
+                WHERE ${D} AND language IS NOT NULL
+                GROUP BY language ORDER BY n DESC LIMIT 10`, date),
+      all(env, `SELECT install_id, COUNT(*) AS events,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                       MIN(ts) AS first_ts, MAX(ts) AS last_ts
+                FROM events WHERE ${D}
+                GROUP BY install_id ORDER BY events DESC LIMIT 100`, date),
+      all(env, `SELECT COALESCE(difficulty,'Unknown') AS difficulty, COUNT(*) AS n
+                FROM events WHERE ${D} AND event='push_ok'
+                GROUP BY difficulty ORDER BY n DESC`, date),
+    ]);
+
+  return {
+    date,
+    generatedAt: Date.now(),
+    totals: totals[0] || { events: 0, installs: 0 },
+    hourly, statuses, problems, languages, installs, difficulty,
+  };
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return json({ ok: true });
@@ -269,6 +329,17 @@ export default {
         if (url.pathname === '/api/users') return json(await users(env, days));
         if (url.pathname === '/api/activity') {
           return json(await activity(env, days, int('limit', 200, 1, 1000)));
+        }
+
+        if (url.pathname === '/api/day') {
+          const date = str(url.searchParams.get('date'), 10);
+          // Anything but YYYY-MM-DD would compare against date() and quietly
+          // return an empty day rather than an error, which reads as "nothing
+          // happened" — so reject the shape up front.
+          if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return json({ error: 'date must be YYYY-MM-DD' }, 400);
+          }
+          return json(await dayDetail(env, date));
         }
 
         if (url.pathname === '/api/user') {

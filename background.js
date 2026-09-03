@@ -522,6 +522,22 @@ async function updateRootReadme(repo, newProblem) {
   console.log(`[LeetSync] Root README updated with ${problems.length} total problems`);
 }
 
+/**
+ * Record an event and send it straight away.
+ *
+ * The periodic alarm on its own meant an event could sit on the device for up
+ * to half an hour before it went anywhere, which reads as "the dashboard is
+ * broken" the first time you try it. Both calls are no-ops when consent is
+ * off, and flush() does nothing when the queue is empty, so this stays quiet
+ * for anyone who has not opted in. The alarm remains as the retry path for
+ * whatever was queued while offline.
+ */
+function report(event, fields = {}) {
+  Analytics.track(event, fields)
+    .then(() => Analytics.flush())
+    .catch(() => {});
+}
+
 // ── Message Listener ─────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -530,7 +546,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then((result) => {
         // A successful push clears any recovery state the popup was showing.
         chrome.storage.local.remove('lastPushError');
-        Analytics.track('push_ok', {
+        report('push_ok', {
           slug: slugFromLeetCodeUrl(message.data?.url),
           title: message.data?.title,
           difficulty: message.data?.difficulty,
@@ -540,7 +556,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // code-sharing consent is on. Runtime and memory ride the
           // `submission` event instead, so they are not repeated here.
           code: message.data?.code,
-        }).catch(() => {});
+        });
         // On success, also try processing any queued items
         processOfflineQueue().catch(() => {});
         sendResponse(result);
@@ -562,11 +578,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // Only the category, never the message: GitHub errors embed the
         // repository path, which must not leave the device.
-        Analytics.track('push_fail', {
+        report('push_fail', {
           detail: isAuthError ? 'auth' : isNetworkError ? 'network' : 'other',
           difficulty: message.data?.difficulty,
           language: message.data?.language,
-        }).catch(() => {});
+        });
 
         // Persisted so the popup can offer recovery instead of a bare message.
         await chrome.storage.local.set({
@@ -708,7 +724,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Usage event forwarded from the popup. The service worker owns the queue
   // so there is only ever one writer; a no-op unless the user opted in.
   if (message.type === 'TRACK') {
-    Analytics.track(message.event, message.fields || {}).catch(() => {});
+    report(message.event, message.fields || {});
     return false;
   }
 
@@ -1525,11 +1541,18 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('flushAnalytics', { periodInMinutes: 30 });
 
   // No-ops unless the user has opted in.
-  Analytics.track(details.reason === 'update' ? 'update' : 'install');
+  report(details.reason === 'update' ? 'update' : 'install');
 });
 
 // Also re-inject when the service worker starts
 reinjectIntoLeetCodeTabs();
+
+// onInstalled fires once; a profile that lost its alarms would otherwise
+// never get the retry path back. create() is a no-op when one already exists
+// with the same name and period, so this is safe to run on every startup.
+chrome.alarms.get('flushAnalytics', (existing) => {
+  if (!existing) chrome.alarms.create('flushAnalytics', { periodInMinutes: 30 });
+});
 
 // ── Alarm Handler ────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener((alarm) => {
