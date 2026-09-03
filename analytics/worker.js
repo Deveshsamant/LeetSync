@@ -168,12 +168,14 @@ async function summary(env, days) {
       all(env, `SELECT status, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
                 FROM events WHERE ts >= ? AND event='submission' AND status IS NOT NULL
                 GROUP BY status ORDER BY n DESC`, since),
-      // Installs that have used each theme, counted once per theme per
-      // install. Reporting only the latest theme hid the fact that someone
-      // had used the other one at all, which is the more interesting signal.
-      all(env, `SELECT theme, COUNT(DISTINCT install_id) AS installs
-                FROM events WHERE ts >= ? AND theme IS NOT NULL
-                GROUP BY theme ORDER BY installs DESC`, since),
+      // Each install counted once, at the theme it is on now — what people
+      // sit on, not everything they have tried. A switch records the theme it
+      // switched to, so "now" updates the moment someone changes it rather
+      // than waiting for their next popup open.
+      all(env, `SELECT theme, COUNT(*) AS installs FROM (
+                  SELECT install_id, theme, MAX(ts) FROM events
+                  WHERE ts >= ? AND theme IS NOT NULL GROUP BY install_id
+                ) GROUP BY theme ORDER BY installs DESC`, since),
       // Difficulty arrives on push_ok rows while runtime and memory arrive on
       // submission rows, so this has to resolve difficulty through the slug —
       // asking one row for both would match nothing.
