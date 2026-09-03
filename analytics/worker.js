@@ -121,8 +121,12 @@ const all = async (env, sql, ...binds) =>
 async function summary(env, days) {
   const since = Date.now() - days * 86400000;
 
+  // The window immediately before this one, same length, so every headline
+  // figure can be shown as a change rather than a number without context.
+  const prevSince = since - days * 86400000;
+
   const [totals, daily, events, problems, difficulty, languages, versions,
-         failures, sheets, statuses, themes, perf] =
+         failures, sheets, statuses, themes, perf, previous, funnel] =
     await Promise.all([
       all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
                        MIN(ts) AS first_seen, MAX(ts) AS last_seen
@@ -189,14 +193,93 @@ async function summary(env, days) {
                       WHERE difficulty IS NOT NULL GROUP BY slug) d ON d.slug = e.slug
                 WHERE e.ts >= ?
                 GROUP BY d.difficulty`, since),
+      all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                       SUM(CASE WHEN event='push_fail' THEN 1 ELSE 0 END) AS failures
+                FROM events WHERE ts >= ? AND ts < ?`, prevSince, since),
+      // Each stage counts installs, not events, so one very busy user cannot
+      // make a stage look healthier than it is.
+      all(env, `SELECT
+                  COUNT(DISTINCT install_id) AS reached_install,
+                  COUNT(DISTINCT CASE WHEN event='repo_setup' THEN install_id END) AS reached_repo,
+                  COUNT(DISTINCT CASE WHEN event='submission' THEN install_id END) AS reached_submit,
+                  COUNT(DISTINCT CASE WHEN event='push_ok' THEN install_id END) AS reached_push
+                FROM events WHERE ts >= ?`, since),
     ]);
 
   return {
     days,
     generatedAt: Date.now(),
     totals: totals[0] || { events: 0, installs: 0 },
+    previous: previous[0] || { events: 0, installs: 0 },
+    funnel: funnel[0] || {},
     daily, events, problems, difficulty, languages, versions, failures, sheets,
     statuses, themes, perf,
+  };
+}
+
+/**
+ * Weekly retention cohorts.
+ *
+ * Deliberately not limited by the dashboard's range: retention is about what
+ * happened to people after they arrived, so cutting the history at 30 days
+ * would report every cohort as having churned. The range only decides how far
+ * back the listed cohorts start.
+ */
+async function retention(env, days) {
+  const since = Date.now() - days * 86400000;
+  const WEEK = 604800000;
+  const rows = await all(env, `
+    WITH firsts AS (
+      SELECT install_id, MIN(ts) AS first_ts FROM events GROUP BY install_id
+    )
+    SELECT strftime('%Y-W%W', f.first_ts/1000, 'unixepoch') AS cohort,
+           MIN(f.first_ts) AS started,
+           COUNT(DISTINCT f.install_id) AS size,
+           COUNT(DISTINCT CASE WHEN e.ts >= f.first_ts + ? THEN f.install_id END) AS week1,
+           COUNT(DISTINCT CASE WHEN e.ts >= f.first_ts + ? THEN f.install_id END) AS week2,
+           COUNT(DISTINCT CASE WHEN e.ts >= f.first_ts + ? THEN f.install_id END) AS week4
+    FROM firsts f JOIN events e ON e.install_id = f.install_id
+    WHERE f.first_ts >= ?
+    GROUP BY cohort ORDER BY started DESC LIMIT 12`,
+    WEEK, WEEK * 2, WEEK * 4, since);
+  return { days, generatedAt: Date.now(), cohorts: rows };
+}
+
+/** Everything about one problem, for the drill-down. */
+async function problemDetail(env, slug, days) {
+  const since = Date.now() - days * 86400000;
+  const [totals, statuses, languages, installs, daily] = await Promise.all([
+    all(env, `SELECT MAX(title) AS title, MAX(difficulty) AS difficulty,
+                     SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS attempts,
+                     SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                     SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                     COUNT(DISTINCT install_id) AS installs,
+                     AVG(CASE WHEN status='Accepted' THEN runtime_ms END) AS avg_runtime,
+                     AVG(CASE WHEN status='Accepted' THEN memory_kb END) AS avg_memory
+              FROM events WHERE ts >= ? AND slug = ?`, since, slug),
+    all(env, `SELECT status, COUNT(*) AS n FROM events
+              WHERE ts >= ? AND slug = ? AND status IS NOT NULL
+              GROUP BY status ORDER BY n DESC`, since, slug),
+    all(env, `SELECT language, COUNT(*) AS n FROM events
+              WHERE ts >= ? AND slug = ? AND language IS NOT NULL
+              GROUP BY language ORDER BY n DESC LIMIT 10`, since, slug),
+    all(env, `SELECT install_id, MAX(display_name) AS display_name,
+                     SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS attempts,
+                     SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                     MAX(ts) AS last_ts
+              FROM events WHERE ts >= ? AND slug = ?
+              GROUP BY install_id ORDER BY attempts DESC LIMIT 100`, since, slug),
+    all(env, `SELECT date(ts/1000,'unixepoch') AS day, COUNT(*) AS n,
+                     SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted
+              FROM events WHERE ts >= ? AND slug = ? AND event='submission'
+              GROUP BY day ORDER BY day`, since, slug),
+  ]);
+  return {
+    slug, days, generatedAt: Date.now(),
+    totals: totals[0] || {}, statuses, languages, installs, daily,
   };
 }
 
@@ -375,7 +458,85 @@ async function claimName(env, rawName, rawInstall) {
   return json({ ok: true, name });
 }
 
+/**
+ * Hourly push-failure check.
+ *
+ * A bad release breaks pushes for everyone at once, and the dashboard only
+ * shows that if someone opens it. This is the part that comes to you.
+ *
+ * Deliberately quiet: it needs a webhook configured, a real sample to judge
+ * (a single failed push out of two is not a signal), and it will not fire
+ * again within the cooldown, or a sustained outage would alert every hour.
+ */
+const ALERT_WINDOW_MS = 3600000;
+const ALERT_MIN_PUSHES = 5;      // below this the rate is noise
+const ALERT_THRESHOLD = 0.35;    // fraction of pushes failing
+const ALERT_COOLDOWN_MS = 21600000;  // 6 hours
+
+async function readMeta(env, key) {
+  const rows = await all(env, 'SELECT value FROM meta WHERE key = ?', key);
+  return rows.length ? rows[0].value : null;
+}
+
+async function checkFailures(env) {
+  const webhook = env.ALERT_WEBHOOK;
+  if (!webhook) return { skipped: 'no webhook configured' };
+
+  const since = Date.now() - ALERT_WINDOW_MS;
+  const rows = await all(env, `
+    SELECT SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS ok,
+           SUM(CASE WHEN event='push_fail' THEN 1 ELSE 0 END) AS failed,
+           COUNT(DISTINCT CASE WHEN event='push_fail' THEN install_id END) AS installs
+    FROM events WHERE ts >= ? AND event IN ('push_ok','push_fail')`, since);
+
+  const ok = (rows[0] && rows[0].ok) || 0;
+  const failed = (rows[0] && rows[0].failed) || 0;
+  const installs = (rows[0] && rows[0].installs) || 0;
+  const total = ok + failed;
+  if (total < ALERT_MIN_PUSHES) return { quiet: true, total };
+
+  const rate = failed / total;
+  if (rate < ALERT_THRESHOLD) return { healthy: true, rate };
+
+  const last = Number(await readMeta(env, 'lastAlertTs')) || 0;
+  if (Date.now() - last < ALERT_COOLDOWN_MS) return { suppressed: true, rate };
+
+  // Which reasons, so the message says something actionable.
+  const reasons = await all(env, `
+    SELECT COALESCE(detail,'other') AS reason, COUNT(*) AS n
+    FROM events WHERE ts >= ? AND event='push_fail'
+    GROUP BY reason ORDER BY n DESC`, since);
+  const breakdown = reasons.map(r => `${r.reason} ×${r.n}`).join(', ') || 'unknown';
+
+  const text = `LeetSync: ${failed} of ${total} pushes failed in the last hour`
+    + ` (${Math.round(rate * 100)}%), across ${installs} install${installs === 1 ? '' : 's'}.`
+    + ` Reasons: ${breakdown}.`;
+
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // Both keys, so one webhook URL works for Slack or Discord unchanged.
+      body: JSON.stringify({ text, content: text }),
+    });
+    await env.DB.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      .bind('lastAlertTs', String(Date.now())).run();
+    return { alerted: true, rate, failed, total };
+  } catch (error) {
+    // Never throw out of a cron: a failed alert must not retry-storm.
+    console.error('[LeetSync] alert failed:', error && error.message);
+    return { error: String(error).slice(0, 200) };
+  }
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(checkFailures(env).then(
+      (r) => console.log('[LeetSync] failure check:', JSON.stringify(r)),
+      (e) => console.error('[LeetSync] failure check threw:', e && e.message)
+    ));
+  },
+
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return json({ ok: true });
 
@@ -391,6 +552,18 @@ export default {
         if (url.pathname === '/api/users') return json(await users(env, days));
         if (url.pathname === '/api/activity') {
           return json(await activity(env, days, int('limit', 200, 1, 1000)));
+        }
+
+        if (url.pathname === '/api/retention') return json(await retention(env, days));
+
+        // The same check the hourly cron runs, on demand — so it can be
+        // verified without waiting an hour or faking a clock.
+        if (url.pathname === '/api/check-failures') return json(await checkFailures(env));
+
+        if (url.pathname === '/api/problem') {
+          const slug = str(url.searchParams.get('slug'), 128);
+          if (!slug) return json({ error: 'slug required' }, 400);
+          return json(await problemDetail(env, slug, days));
         }
 
         if (url.pathname === '/api/day') {

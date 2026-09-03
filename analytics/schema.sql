@@ -49,3 +49,10 @@ CREATE TABLE IF NOT EXISTS names (
 );
 
 CREATE INDEX IF NOT EXISTS idx_names_install ON names(install_id);
+
+-- Worker bookkeeping. Not analytics data: currently only the timestamp of the
+-- last alert, so a sustained failure does not alert once an hour forever.
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

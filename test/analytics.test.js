@@ -257,3 +257,108 @@ test('every column clean() emits exists in the schema', () => {
     assert.ok(columns.has(key), `clean() emits "${key}" but schema.sql has no such column`);
   }
 });
+
+// ── Failure alerting ─────────────────────────────────────────
+// checkFailures is not exported either, so it is evaluated from source with
+// a stubbed database and fetch. Nothing leaves the process.
+
+const checkFailures = (() => {
+  const start = workerSrc.indexOf('const MAX_BATCH');
+  const end = workerSrc.indexOf('export default');
+  return eval(`${workerSrc.slice(start, end)}; checkFailures`);
+})();
+
+/** A database that answers the two queries checkFailures makes. */
+function stubEnv({ ok, failed, installs, lastAlertTs, webhook = 'https://example.invalid/hook' }) {
+  const sent = [];
+  const rowsFor = (sql) => {
+    if (sql.includes('lastAlertTs') || sql.includes('FROM meta')) {
+      return lastAlertTs === undefined ? [] : [{ value: String(lastAlertTs) }];
+    }
+    if (sql.includes("event='push_fail'") && sql.includes('GROUP BY reason')) {
+      return [{ reason: 'auth', n: failed }];
+    }
+    return [{ ok, failed, installs }];
+  };
+  const env = {
+    ALERT_WEBHOOK: webhook,
+    DB: {
+      prepare: (sql) => ({
+        bind: () => ({ all: async () => ({ results: rowsFor(sql) }), run: async () => ({}) }),
+        all: async () => ({ results: rowsFor(sql) }),
+        run: async () => ({}),
+      }),
+    },
+  };
+  return { env, sent };
+}
+
+test('no webhook means the check does nothing at all', async () => {
+  // null, not undefined: a default parameter would fire on undefined and
+  // hand the stub a webhook after all.
+  const { env } = stubEnv({ ok: 0, failed: 99, installs: 9, webhook: null });
+  const out = await checkFailures(env);
+  assert.equal(out.skipped, 'no webhook configured');
+});
+
+test('a tiny sample is not a signal', async () => {
+  // Two pushes, both failed, is 100% — and means nothing.
+  const { env } = stubEnv({ ok: 0, failed: 2, installs: 1 });
+  const out = await checkFailures(env);
+  assert.equal(out.quiet, true);
+  assert.equal(out.total, 2);
+});
+
+test('a healthy failure rate does not alert', async () => {
+  const { env } = stubEnv({ ok: 95, failed: 5, installs: 2 });
+  const out = await checkFailures(env);
+  assert.equal(out.healthy, true);
+});
+
+test('a spike alerts, and says how bad and why', async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { calls.push({ url, init }); return { ok: true }; };
+  try {
+    const { env } = stubEnv({ ok: 10, failed: 40, installs: 7 });
+    const out = await checkFailures(env);
+    assert.equal(out.alerted, true);
+    assert.equal(out.failed, 40);
+    assert.equal(out.total, 50);
+    assert.equal(calls.length, 1);
+    const body = JSON.parse(calls[0].init.body);
+    // Both keys, so one URL works for Slack or Discord unchanged.
+    assert.equal(body.text, body.content);
+    assert.match(body.text, /40 of 50 pushes failed/);
+    assert.match(body.text, /7 installs/);
+    assert.match(body.text, /auth/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('an ongoing outage does not alert every hour', async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { calls.push(1); return { ok: true }; };
+  try {
+    const { env } = stubEnv({ ok: 10, failed: 40, installs: 7, lastAlertTs: Date.now() - 60000 });
+    const out = await checkFailures(env);
+    assert.equal(out.suppressed, true);
+    assert.equal(calls.length, 0, 'nothing should be sent inside the cooldown');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('a webhook that throws does not escape the cron', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('connect ECONNREFUSED'); };
+  try {
+    const { env } = stubEnv({ ok: 10, failed: 40, installs: 7 });
+    const out = await checkFailures(env);
+    assert.match(out.error, /ECONNREFUSED/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

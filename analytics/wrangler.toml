@@ -6,3 +6,8 @@ compatibility_date = "2026-09-01"
 binding = "DB"
 database_name = "leetsync-analytics"
 database_id = "4d2953f7-13e6-45a9-8924-6bbd3a3d8532"
+
+# Hourly failure check. The handler is a no-op unless ALERT_WEBHOOK is set:
+#   npx wrangler secret put ALERT_WEBHOOK
+[triggers]
+crons = ["0 * * * *"]

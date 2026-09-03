@@ -68,6 +68,9 @@ closed rather than open.
 | `/api/user?id=<install>&limit=300` | One install's profile, language mix, and event timeline |
 | `/api/activity?days=30&limit=200` | The raw event feed, newest first |
 | `/api/code?id=<event id>` | The stored solution for one event, 404 when none was shared |
+| `/api/retention?days=365` | Weekly cohorts and how many of each were still active at 1, 2 and 4 weeks |
+| `/api/problem?slug=<slug>` | One problem: verdicts, languages, who attempted it, attempts per day |
+| `/api/check-failures` | Runs the hourly failure check now and reports what it decided |
 
 ## Migrations
 
@@ -85,3 +88,22 @@ npx wrangler d1 execute leetsync-analytics --remote --file=migrations/001_richer
 reach the database, and `schema.sql` has no column for anything identifying.
 Solution code is gated a third time, behind its own consent, and is the only
 user-authored content the table can hold.
+
+## Failure alerting
+
+An hourly cron checks the push-failure rate and posts to a webhook when it
+spikes, so a bad release does not wait for someone to open the dashboard.
+
+It is off until a webhook is configured:
+
+```bash
+npx wrangler secret put ALERT_WEBHOOK
+```
+
+The body carries the message under both `text` and `content`, so one URL works
+for Slack or Discord unchanged.
+
+It stays quiet on purpose: fewer than 5 pushes in the hour is treated as no
+signal, the rate has to cross 35%, and it will not fire again for 6 hours, or
+a sustained outage would alert every hour. `/api/check-failures` runs the same
+check on demand so it can be verified without waiting.
