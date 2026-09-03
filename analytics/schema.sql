@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS events (
   tests_passed INTEGER,
   tests_total  INTEGER,
   code_len     INTEGER,            -- length of the solution, always
-  code         TEXT                -- the solution itself, only under consent
+  code         TEXT,               -- the solution itself, only under consent
+  display_name TEXT                -- optional name the user typed for themselves
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_ts      ON events(ts);

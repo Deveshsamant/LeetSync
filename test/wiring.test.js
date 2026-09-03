@@ -106,3 +106,19 @@ test('the preview generator writes names Chrome will accept', () => {
       `make-preview.mjs writes "${name}" into the extension root, and a leading underscore stops Chrome loading the extension`);
   }
 });
+
+test('no stray control characters in shipped source', () => {
+  // A shell heredoc once turned an intended "\b" into a real 0x08 byte, which
+  // left a regex silently unmatchable and invisible in every editor and diff.
+  // Tab, newline and carriage return are the only control bytes that belong.
+  const files = ['content.js', 'background.js', 'popup.js', 'analytics.js',
+    'tracker.js', 'readme.js', 'sheet-progress.js', 'utils.js',
+    'analytics/worker.js'];
+  for (const name of files) {
+    const src = readFileSync(join(__dirname, '..', name), 'utf8');
+    const bad = [...src].map((c, i) => [c.charCodeAt(0), i])
+      .filter(([code]) => code < 32 && code !== 9 && code !== 10 && code !== 13);
+    assert.equal(bad.length, 0,
+      `${name} holds control byte 0x${(bad[0] || [0])[0].toString(16)} at offset ${(bad[0] || [])[1]}`);
+  }
+});

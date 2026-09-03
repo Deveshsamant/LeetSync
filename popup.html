@@ -465,6 +465,16 @@
             included, so leave this off if your code carries anything personal.
           </div>
 
+          <div class="form-group" id="displayNameRow" style="display:none;margin-top:12px;">
+            <label class="form-label" for="displayName">Display name (optional)</label>
+            <input type="text" id="displayName" class="form-input" maxlength="40"
+                   placeholder="e.g. Devesh" autocomplete="off" spellcheck="false">
+            <div class="form-hint" style="margin-top:6px;">
+              Shown to the developer alongside your usage data instead of a random
+              ID. Leave it blank to stay anonymous — nothing else identifies you.
+            </div>
+          </div>
+
           <div class="about-row" id="analyticsIdRow" style="display:none;">
             <span>Your install ID</span>
             <span class="about-version" id="analyticsId"></span>

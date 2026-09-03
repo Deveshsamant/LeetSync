@@ -105,11 +105,31 @@ test('worker stores no field outside the schema', () => {
     githubToken: 'ghp_secret', repo: 'me/solutions', ip: '1.2.3.4', email: 'a@b.c',
   });
   assert.deepEqual(Object.keys(row).sort(), [
-    'client_ts', 'code', 'code_len', 'detail', 'difficulty', 'event',
-    'install_id', 'language', 'memory_kb', 'runtime_ms', 'slug', 'status',
-    'tests_passed', 'tests_total', 'theme', 'title', 'version',
+    'client_ts', 'code', 'code_len', 'detail', 'difficulty', 'display_name',
+    'event', 'install_id', 'language', 'memory_kb', 'runtime_ms', 'slug',
+    'status', 'tests_passed', 'tests_total', 'theme', 'title', 'version',
   ]);
   assert.equal(JSON.stringify(row).includes('ghp_secret'), false);
+});
+
+test('a display name is optional and never invented', () => {
+  // Absent means anonymous; the Worker must not substitute anything.
+  assert.equal(clean({ installId: 'a', event: 'session' }).display_name, null);
+  assert.equal(clean({ installId: 'a', event: 'session', name: '   ' }).display_name, null);
+  assert.equal(clean({ installId: 'a', event: 'session', name: 'Devesh' }).display_name, 'Devesh');
+  assert.equal(
+    clean({ installId: 'a', event: 'session', name: 'x'.repeat(200) }).display_name.length, 40);
+});
+
+test('pick() never carries a display name from a caller', () => {
+  // track() reads it from storage; a caller must not be able to set one.
+  assert.deepEqual(Object.keys(Analytics.pick({ name: 'someone else', slug: 'two-sum' })), ['slug']);
+});
+
+test('withdrawing consent forgets the name', () => {
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(src, /remove\(\[QUEUE_KEY, ID_KEY, NAME_KEY\]/,
+    'setEnabled(false) must drop the display name, the one identifying field');
 });
 
 test('worker normalises an unexpected difficulty to null', () => {

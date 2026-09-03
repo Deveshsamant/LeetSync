@@ -688,7 +688,10 @@ document.addEventListener('DOMContentLoaded', () => {
     card.addEventListener('click', () => {
       const theme = card.dataset.uiTheme;
       applyUITheme(theme);
-      Analytics.track('theme', { detail: theme });
+      // The theme field, not just the label: a switch is the only record that
+      // a theme was ever used, since the session event already went out
+      // carrying the previous one.
+      Analytics.track('theme', { detail: theme, theme });
       chrome.storage.sync.set({ uiTheme: theme });
     });
   });
@@ -1065,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   const analyticsToggle = document.getElementById('analyticsToggle');
   const shareCodeToggle = document.getElementById('shareCodeToggle');
+  const displayNameInput = document.getElementById('displayName');
 
   function paintShareCodeToggle(on) {
     shareCodeToggle.classList.toggle('on', on);
@@ -1079,14 +1083,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = document.getElementById('analyticsIdRow');
     row.style.display = on ? '' : 'none';
 
-    // Code sharing is meaningless while reporting is off, and showing it
-    // there would suggest the main switch already covers it.
-    for (const id of ['shareCodeRow', 'shareCodeHint']) {
+    // Code sharing and the name are meaningless while reporting is off, and
+    // showing them there would suggest the main switch already covers them.
+    for (const id of ['shareCodeRow', 'shareCodeHint', 'displayNameRow']) {
       document.getElementById(id).style.display = on ? '' : 'none';
     }
 
     if (!on) {
       paintShareCodeToggle(false);
+      displayNameInput.value = '';       // setEnabled(false) cleared the stored one
       return;
     }
     chrome.storage.local.get([Analytics.ID_KEY], (data) => {
@@ -1110,6 +1115,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // rather than assuming the flip took.
     const granted = await Analytics.setShareCode(!shareCodeToggle.classList.contains('on'));
     paintShareCodeToggle(granted);
+  });
+
+  Analytics.displayName().then((name) => { displayNameInput.value = name || ''; });
+
+  // Saved as you leave the field rather than on every keystroke, so a
+  // half-typed name never rides out on an event.
+  displayNameInput.addEventListener('change', async () => {
+    displayNameInput.value = await Analytics.setDisplayName(displayNameInput.value);
+  });
+  displayNameInput.addEventListener('blur', async () => {
+    displayNameInput.value = await Analytics.setDisplayName(displayNameInput.value);
   });
 
   // ═══════════════════════════════════════════════════════════

@@ -32,10 +32,12 @@ const Analytics = (() => {
   const SHARE_CODE_KEY = 'analyticsShareCode';
   const ID_KEY = 'analyticsInstallId';
   const QUEUE_KEY = 'analyticsQueue';
+  const NAME_KEY = 'analyticsDisplayName';
 
   const MAX_QUEUE = 200;   // events kept while offline; oldest dropped past this
   const BATCH = 50;        // must match the Worker's MAX_BATCH
   const MAX_CODE = 20000;  // characters of source, when code sharing is on
+  const MAX_NAME = 40;     // characters of a display name
 
   const isWorker = typeof window === 'undefined';
   const configured = () => typeof ENDPOINT === 'string' && ENDPOINT.startsWith('https://');
@@ -56,6 +58,27 @@ const Analytics = (() => {
   async function sharesCode() {
     const { [SHARE_CODE_KEY]: on } = await local([SHARE_CODE_KEY]);
     return on === true;
+  }
+
+  /**
+   * A name the user typed for themselves, or null.
+   *
+   * Unlike the install id this is not anonymous, which is the point — it is
+   * what lets a person be recognised instead of read as a hex string. It is
+   * therefore always optional, never prefilled, and never derived from the
+   * GitHub account, and it goes out only while usage reporting is on.
+   */
+  async function displayName() {
+    const { [NAME_KEY]: name } = await local([NAME_KEY]);
+    return (typeof name === 'string' && name.trim())
+      ? name.trim().slice(0, MAX_NAME) : null;
+  }
+
+  /** Empty clears it; past events already sent keep whatever they carried. */
+  async function setDisplayName(name) {
+    const cleaned = typeof name === 'string' ? name.trim().slice(0, MAX_NAME) : '';
+    await setLocal({ [NAME_KEY]: cleaned });
+    return cleaned;
   }
 
   /** Random, not derived from anything about the user or their account. */
@@ -98,6 +121,11 @@ const Analytics = (() => {
     if (typeof fields.code === 'string' && fields.code && await sharesCode()) {
       entry.code = fields.code.slice(0, MAX_CODE);
     }
+
+    // Carried on every event so the dashboard can name a row without having
+    // to join back to whichever event happened to introduce the name.
+    const name = await displayName();
+    if (name) entry.name = name;
 
     const { [QUEUE_KEY]: queue = [] } = await local([QUEUE_KEY]);
     queue.push(entry);
@@ -197,9 +225,10 @@ const Analytics = (() => {
       await installId();
       return;
     }
-    // Off means off for everything, including the separate code consent.
+    // Off means off for everything: the code consent, and the name, which is
+    // the one identifying thing here and must not survive a withdrawal.
     await setLocal({ [SHARE_CODE_KEY]: false });
-    await new Promise(r => chrome.storage.local.remove([QUEUE_KEY, ID_KEY], r));
+    await new Promise(r => chrome.storage.local.remove([QUEUE_KEY, ID_KEY, NAME_KEY], r));
   }
 
   /** Code sharing cannot be switched on while usage reporting is off. */
@@ -211,8 +240,9 @@ const Analytics = (() => {
 
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
-    CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY,
-    pick, MAX_QUEUE, BATCH, MAX_CODE,
+    displayName, setDisplayName,
+    CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY,
+    pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };
 })();
 

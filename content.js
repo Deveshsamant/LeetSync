@@ -251,7 +251,7 @@
 
   /** "52 ms" -> 52. "N/A" and anything unparseable -> null. */
   function parseRuntimeMs(text) {
-    const m = /([\d.]+)\s*(ms|s)/i.exec(String(text || ''));
+    const m = /([\d.]+)\s*(ms|s)/i.exec(String(text || ''));
     if (!m) return null;
     const n = parseFloat(m[1]);
     if (!Number.isFinite(n)) return null;
@@ -260,7 +260,7 @@
 
   /** "42.1 MB" -> kilobytes. */
   function parseMemoryKb(text) {
-    const m = /([\d.]+)\s*(kb|mb|gb)/i.exec(String(text || ''));
+    const m = /([\d.]+)\s*(kb|mb|gb)/i.exec(String(text || ''));
     if (!m) return null;
     const n = parseFloat(m[1]);
     if (!Number.isFinite(n)) return null;

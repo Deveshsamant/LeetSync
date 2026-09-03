@@ -14,6 +14,7 @@
 const MAX_BATCH = 50;              // events per request
 const MAX_BODY = 2 * 1024 * 1024;  // a batch carrying code can reach ~1 MB
 const MAX_CODE = 20000;            // must match the client's cap
+const MAX_NAME = 40;               // must match the client's cap
 const EVENTS = new Set([
   'install', 'update', 'push_ok', 'push_fail', 'tab', 'sheet', 'tracker',
   'export', 'import', 'theme', 'repo_setup', 'submission', 'session',
@@ -86,6 +87,9 @@ function clean(raw) {
     // Present only when the device has the separate code-sharing consent on;
     // the client omits it otherwise, so there is nothing here to strip.
     code: str(raw.code, MAX_CODE),
+    // Optional and user-typed. The only field here a person chose to be
+    // identified by, so it is capped and otherwise treated like any label.
+    display_name: str(raw.name, MAX_NAME),
     client_ts: Number.isFinite(raw.ts) ? Math.floor(raw.ts) : null,
   };
 }
@@ -164,12 +168,12 @@ async function summary(env, days) {
       all(env, `SELECT status, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
                 FROM events WHERE ts >= ? AND event='submission' AND status IS NOT NULL
                 GROUP BY status ORDER BY n DESC`, since),
-      // Each install counted once, at whatever theme it last reported, so
-      // switching themes cannot inflate the losing side.
-      all(env, `SELECT theme, COUNT(*) AS installs FROM (
-                  SELECT install_id, theme, MAX(ts) FROM events
-                  WHERE ts >= ? AND theme IS NOT NULL GROUP BY install_id
-                ) GROUP BY theme ORDER BY installs DESC`, since),
+      // Installs that have used each theme, counted once per theme per
+      // install. Reporting only the latest theme hid the fact that someone
+      // had used the other one at all, which is the more interesting signal.
+      all(env, `SELECT theme, COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? AND theme IS NOT NULL
+                GROUP BY theme ORDER BY installs DESC`, since),
       // Difficulty arrives on push_ok rows while runtime and memory arrive on
       // submission rows, so this has to resolve difficulty through the slug —
       // asking one row for both would match nothing.
@@ -206,6 +210,7 @@ async function users(env, days) {
                      SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
                      COUNT(DISTINCT slug) AS problems,
                      MAX(version) AS version,
+                     MAX(display_name) AS display_name,
                      SUM(CASE WHEN code IS NULL THEN 0 ELSE 1 END) AS code_shared
               FROM events WHERE ts >= ?
               GROUP BY install_id ORDER BY last_seen DESC LIMIT 200`, since),
@@ -227,7 +232,8 @@ async function userDetail(env, installId, limit) {
                      SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
                      SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
                      SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
-                     COUNT(DISTINCT slug) AS problems, MAX(version) AS version
+                     COUNT(DISTINCT slug) AS problems, MAX(version) AS version,
+                     MAX(display_name) AS display_name
               FROM events WHERE install_id = ?`, installId),
     all(env, `SELECT id, ts, event, slug, title, difficulty, language, status,
                      detail, version, theme, runtime_ms, memory_kb,
@@ -251,9 +257,10 @@ async function userDetail(env, installId, limit) {
 async function activity(env, days, limit) {
   const since = Date.now() - days * 86400000;
   const rows = await all(env,
-    `SELECT id, ts, install_id, event, slug, title, difficulty, language, status,
-            detail, version, runtime_ms, memory_kb, tests_passed, tests_total,
-            code_len, CASE WHEN code IS NULL THEN 0 ELSE 1 END AS has_code
+    `SELECT id, ts, install_id, display_name, event, slug, title, difficulty,
+            language, status, detail, version, runtime_ms, memory_kb,
+            tests_passed, tests_total, code_len,
+            CASE WHEN code IS NULL THEN 0 ELSE 1 END AS has_code
      FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT ?`, since, limit);
   return { days, generatedAt: Date.now(), rows };
 }
@@ -293,7 +300,7 @@ async function dayDetail(env, date) {
       all(env, `SELECT language, COUNT(*) AS n FROM events
                 WHERE ${D} AND language IS NOT NULL
                 GROUP BY language ORDER BY n DESC LIMIT 10`, date),
-      all(env, `SELECT install_id, COUNT(*) AS events,
+      all(env, `SELECT install_id, MAX(display_name) AS display_name, COUNT(*) AS events,
                        SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
                        SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
                        SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
@@ -388,8 +395,8 @@ export default {
       `INSERT INTO events
         (ts, client_ts, install_id, event, version, slug, title, difficulty,
          language, detail, status, theme, runtime_ms, memory_kb,
-         tests_passed, tests_total, code_len, code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         tests_passed, tests_total, code_len, code, display_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     try {
@@ -397,7 +404,7 @@ export default {
         now, r.client_ts, r.install_id, r.event, r.version,
         r.slug, r.title, r.difficulty, r.language, r.detail,
         r.status, r.theme, r.runtime_ms, r.memory_kb,
-        r.tests_passed, r.tests_total, r.code_len, r.code
+        r.tests_passed, r.tests_total, r.code_len, r.code, r.display_name
       )));
     } catch (error) {
       // The extension retries, so a failure here must be visible to it.

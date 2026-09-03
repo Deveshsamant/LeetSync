@@ -34,6 +34,11 @@ off, nothing is collected, queued, or sent, and no identifier exists.
 
 - A random install ID generated on your device. It is not derived from your
   name, email, GitHub account, or anything else about you.
+- **A display name, only if you type one.** Settings has an optional name
+  field. Whatever you put there is sent with your usage data and shown to the
+  developer in place of the random ID. It is never prefilled and never taken
+  from your GitHub account, so leaving it blank keeps you anonymous. Switching
+  usage reporting off deletes it.
 - The extension version, and which of the two themes you are using
 - Which features you use — which tab you open, which study sheet you select,
   when you open the tracker, export or import data, or change theme
