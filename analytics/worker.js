@@ -24,8 +24,11 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
   headers: {
     'content-type': 'application/json',
     'access-control-allow-origin': '*',
-    'access-control-allow-headers': 'content-type',
-    'access-control-allow-methods': 'POST, OPTIONS',
+    // authorization must be listed or the dashboard's preflight fails and
+    // every read is blocked by the browser before it is even sent.
+    'access-control-allow-headers': 'content-type, authorization',
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-max-age': '86400',
   },
 });
 
@@ -61,9 +64,88 @@ function clean(raw) {
   };
 }
 
+/**
+ * Read API for the dashboard.
+ *
+ * Ingest is open because it is write-only and every field is validated, but
+ * reading is the whole dataset, so it needs the shared key. Set it once with:
+ *   wrangler secret put DASHBOARD_KEY
+ * Without the secret configured the read API stays closed rather than open.
+ */
+function authorised(request, env) {
+  const expected = env.DASHBOARD_KEY;
+  if (!expected) return false;
+  const header = request.headers.get('authorization') || '';
+  const given = header.replace(/^Bearer\s+/i, '');
+  if (given.length !== expected.length) return false;
+  // Constant-time-ish: compare every character regardless of early mismatch.
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
+const all = async (env, sql, ...binds) =>
+  (await env.DB.prepare(sql).bind(...binds).all()).results || [];
+
+/** Everything the dashboard renders, in one round trip. */
+async function summary(env, days) {
+  const since = Date.now() - days * 86400000;
+
+  const [totals, daily, events, problems, difficulty, languages, versions, failures, sheets] =
+    await Promise.all([
+      all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
+                       MIN(ts) AS first_seen, MAX(ts) AS last_seen
+                FROM events WHERE ts >= ?`, since),
+      all(env, `SELECT date(ts/1000,'unixepoch') AS day,
+                       COUNT(DISTINCT install_id) AS installs, COUNT(*) AS events
+                FROM events WHERE ts >= ? GROUP BY day ORDER BY day`, since),
+      all(env, `SELECT event, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? GROUP BY event ORDER BY n DESC`, since),
+      all(env, `SELECT slug, title, difficulty, COUNT(*) AS pushes,
+                       COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? AND event='push_ok' AND slug IS NOT NULL
+                GROUP BY slug ORDER BY pushes DESC LIMIT 25`, since),
+      all(env, `SELECT COALESCE(difficulty,'Unknown') AS difficulty, COUNT(*) AS n
+                FROM events WHERE ts >= ? AND event='push_ok'
+                GROUP BY difficulty ORDER BY n DESC`, since),
+      all(env, `SELECT language, COUNT(*) AS n FROM events
+                WHERE ts >= ? AND event='push_ok' AND language IS NOT NULL
+                GROUP BY language ORDER BY n DESC LIMIT 12`, since),
+      all(env, `SELECT COALESCE(version,'unknown') AS version,
+                       COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? GROUP BY version ORDER BY installs DESC`, since),
+      all(env, `SELECT COALESCE(detail,'other') AS reason, COUNT(*) AS n
+                FROM events WHERE ts >= ? AND event='push_fail'
+                GROUP BY reason ORDER BY n DESC`, since),
+      all(env, `SELECT detail AS sheet, COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? AND event='sheet' AND detail IS NOT NULL
+                GROUP BY sheet ORDER BY installs DESC LIMIT 10`, since),
+    ]);
+
+  return {
+    days,
+    generatedAt: Date.now(),
+    totals: totals[0] || { events: 0, installs: 0 },
+    daily, events, problems, difficulty, languages, versions, failures, sheets,
+  };
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return json({ ok: true });
+
+    const url = new URL(request.url);
+
+    if (url.pathname === '/api/summary') {
+      if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
+      const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 30, 1), 365);
+      try {
+        return json(await summary(env, days));
+      } catch (error) {
+        return json({ error: 'query failed', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
     if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
 
     const length = Number(request.headers.get('content-length') || 0);
