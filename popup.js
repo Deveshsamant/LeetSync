@@ -735,6 +735,148 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // TOPICS TO WORK ON
+  //
+  // Topic tags were already being written into each problem README but never
+  // aggregated. Grouping attempts by tag turns them into the one thing the
+  // raw list cannot say: which kinds of problem actually cost you the most.
+  // ═══════════════════════════════════════════════════════════
+  const MIN_TOPIC_PROBLEMS = 2;   // one problem is an anecdote, not a weakness
+  const MAX_TOPICS_SHOWN = 6;
+
+  function renderTopics(problems) {
+    const card = document.getElementById('topicsCard');
+    const list = document.getElementById('topicsList');
+    const hint = document.getElementById('topicsHint');
+
+    const byTag = new Map();
+    for (const p of problems) {
+      const attempts = Number(p.attempts);
+      if (!Array.isArray(p.tags) || !Number.isFinite(attempts)) continue;
+      for (const tag of p.tags) {
+        if (typeof tag !== 'string' || !tag) continue;
+        const acc = byTag.get(tag) || { tag, problems: 0, attempts: 0 };
+        acc.problems += 1;
+        acc.attempts += Math.max(1, attempts);
+        byTag.set(tag, acc);
+      }
+    }
+
+    const ranked = [...byTag.values()]
+      .filter(t => t.problems >= MIN_TOPIC_PROBLEMS)
+      .map(t => ({ ...t, avg: t.attempts / t.problems }))
+      .filter(t => t.avg > 1)          // nothing to work on if it went first try
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, MAX_TOPICS_SHOWN);
+
+    if (!ranked.length) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+
+    const worst = ranked[0].avg;
+    list.innerHTML = '';
+    for (const t of ranked) {
+      // Same row shape the Battle tab already uses, with a wider label so
+      // "Dynamic Programming" is not clipped to two words.
+      const row = document.createElement('div');
+      row.className = 'compare-row';
+      row.style.marginBottom = '7px';
+
+      const name = document.createElement('span');
+      name.className = 'compare-label topic-label';
+      name.textContent = t.tag;
+      name.title = `${t.tag} — ${t.problems} problem${t.problems === 1 ? '' : 's'}, `
+        + `${t.attempts} submission${t.attempts === 1 ? '' : 's'}`;
+
+      const track = document.createElement('div');
+      track.className = 'compare-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'compare-bar-fill';
+      fill.style.width = `${(t.avg / worst) * 100}%`;
+      track.appendChild(fill);
+
+      const value = document.createElement('span');
+      value.className = 'compare-value';
+      value.textContent = `${t.avg.toFixed(1)}\u00d7`;
+
+      row.append(name, track, value);
+      list.appendChild(row);
+    }
+
+    hint.textContent =
+      'Average submissions per solved problem, by topic. Higher means it took more tries.';
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // CONTEST SOLUTIONS HELD BACK
+  //
+  // The content script refuses to publish during a live contest. This is
+  // where they are released, once the user decides the contest is over.
+  // ═══════════════════════════════════════════════════════════
+  const contestCard = document.getElementById('contestCard');
+
+  function renderContestCard() {
+    chrome.runtime.sendMessage({ type: 'GET_PENDING_CONTEST' }, (res) => {
+      if (chrome.runtime.lastError || !res || !res.count) {
+        contestCard.style.display = 'none';
+        return;
+      }
+      contestCard.style.display = '';
+      const contests = res.contests.filter(Boolean);
+      document.getElementById('contestSummary').textContent =
+        `${res.count} solution${res.count === 1 ? '' : 's'} waiting`
+        + (contests.length ? ` from ${contests.join(', ')}` : '');
+
+      const list = document.getElementById('contestList');
+      list.innerHTML = '';
+      for (const item of res.items) {
+        const row = document.createElement('div');
+        row.className = 'set-row';
+        row.style.padding = '5px 0';
+        const name = document.createElement('span');
+        name.textContent = `${item.number || '?'}. ${item.title || 'Untitled'}`;
+        const level = document.createElement('span');
+        level.className = 'about-version';
+        level.textContent = item.difficulty || '—';
+        row.append(name, level);
+        list.appendChild(row);
+      }
+    });
+  }
+
+  document.getElementById('contestPushBtn').addEventListener('click', () => {
+    const btn = document.getElementById('contestPushBtn');
+    const msg = document.getElementById('contestMsg');
+    btn.disabled = true;
+    btn.textContent = 'Pushing…';
+    msg.style.display = 'none';
+
+    chrome.runtime.sendMessage({ type: 'PUSH_PENDING_CONTEST' }, (res) => {
+      btn.disabled = false;
+      btn.textContent = 'Push to GitHub now';
+      msg.style.display = 'block';
+
+      if (chrome.runtime.lastError || !res || !res.success) {
+        msg.className = 'status-message status-error';
+        msg.textContent = res?.error || 'Could not push. Check your token and try again.';
+      } else if (res.remaining) {
+        // Partial success is worth saying plainly — the rest is still queued.
+        msg.className = 'status-message status-error';
+        msg.textContent = `Pushed ${res.pushed}. ${res.remaining} still waiting — check your token.`;
+      } else {
+        msg.className = 'status-message status-success';
+        msg.textContent = `Pushed ${res.pushed} contest solution${res.pushed === 1 ? '' : 's'}.`;
+      }
+      renderContestCard();
+      loadDashboard();
+    });
+  });
+
+  renderContestCard();
+
+  // ═══════════════════════════════════════════════════════════
   // PROBLEMS LIST
   // ═══════════════════════════════════════════════════════════
   const problemsList = document.getElementById('problemsList');
@@ -753,23 +895,59 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       allProblems = response.problems || [];
+      renderTopics(allProblems);
       applyProblemFilters();
     });
   }
 
+  const STALE_DAYS = 30;
+  const solvedAt = (p) => Date.parse(p.firstSolvedOn || p.date || '');
+
+  /**
+   * The chips are difficulties plus two revision views.
+   *
+   * "Struggled" is the problems that took more than one attempt — the ones
+   * worth doing again. "Stale" is solved over a month ago, which is roughly
+   * when a solution stops being recallable. Both come from data already on
+   * the device; neither needs the network.
+   */
+  function matchesChip(p, chip, now) {
+    switch (chip) {
+      case 'all': return true;
+      case 'struggled': return Number(p.attempts) > 1;
+      case 'stale': {
+        const at = solvedAt(p);
+        return Number.isFinite(at) && (now - at) > STALE_DAYS * 86400000;
+      }
+      default: return String(p.difficulty || '').toLowerCase() === chip;
+    }
+  }
+
   function applyProblemFilters() {
     const { search, difficulty } = problemFilters;
+    const now = Date.now();
     const filtered = allProblems.filter(p => {
-      if (difficulty !== 'all'
-        && String(p.difficulty || '').toLowerCase() !== difficulty) return false;
+      if (!matchesChip(p, difficulty, now)) return false;
       if (!search) return true;
       return String(p.title || '').toLowerCase().includes(search)
         || String(p.number || '').includes(search);
     });
 
+    // A revision list is only useful in priority order: hardest-won first,
+    // then longest-neglected.
+    if (difficulty === 'struggled') {
+      filtered.sort((a, b) => (Number(b.attempts) || 0) - (Number(a.attempts) || 0));
+    } else if (difficulty === 'stale') {
+      filtered.sort((a, b) => (solvedAt(a) || 0) - (solvedAt(b) || 0));
+    }
+
     if (allProblems.length && !filtered.length) {
-      problemsList.innerHTML =
-        '<div class="problems-empty">No solved problems match these filters.</div>';
+      const why = difficulty === 'struggled'
+        ? 'Nothing took more than one attempt yet — attempts are recorded from now on.'
+        : difficulty === 'stale'
+          ? `Nothing solved more than ${STALE_DAYS} days ago.`
+          : 'No solved problems match these filters.';
+      problemsList.innerHTML = `<div class="problems-empty">${why}</div>`;
       return;
     }
     renderProblems(filtered);

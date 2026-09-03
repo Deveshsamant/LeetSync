@@ -1390,3 +1390,6 @@ body.theme-light .error-safe .d { border-radius: 0; }
   flex-shrink: 0;
 }
 body.theme-light .error-foot { border-top-color: var(--bd); }
+
+/* Topic names are longer than the Battle tab's "You"/username labels. */
+.compare-label.topic-label { width: 96px; }

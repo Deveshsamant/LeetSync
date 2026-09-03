@@ -729,6 +729,61 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Contest solutions the content script held back rather than publishing
+  // mid-contest. Released only when the user asks.
+  if (message.type === 'GET_PENDING_CONTEST') {
+    chrome.storage.local.get(['pendingContest'], (data) => {
+      const pending = data.pendingContest || [];
+      sendResponse({
+        count: pending.length,
+        contests: [...new Set(pending.map(e => e.contest))],
+        items: pending.map(e => ({
+          contest: e.contest,
+          number: e.data?.number,
+          title: e.data?.title,
+          difficulty: e.data?.difficulty,
+          heldAt: e.heldAt,
+        })),
+      });
+    });
+    return true;
+  }
+
+  if (message.type === 'PUSH_PENDING_CONTEST') {
+    (async () => {
+      const data = await chrome.storage.local.get(['pendingContest']);
+      const pending = data.pendingContest || [];
+      const failed = [];
+      let pushed = 0;
+
+      // Sequential on purpose: each push rewrites the root README, and
+      // running them together would race on its sha.
+      for (const entry of pending) {
+        try {
+          await pushToGitHub(entry.data);
+          pushed++;
+          report('push_ok', {
+            slug: slugFromLeetCodeUrl(entry.data?.url),
+            title: entry.data?.title,
+            difficulty: entry.data?.difficulty,
+            language: entry.data?.language,
+            detail: 'contest',
+            codeLen: typeof entry.data?.code === 'string' ? entry.data.code.length : undefined,
+            code: entry.data?.code,
+          });
+        } catch (error) {
+          console.warn('[LeetSync] Contest push failed:', error.message);
+          failed.push(entry);
+        }
+      }
+
+      // Whatever failed stays queued, so nothing is lost on a bad token.
+      await chrome.storage.local.set({ pendingContest: failed });
+      sendResponse({ success: true, pushed, remaining: failed.length });
+    })().catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   // Usage event forwarded from the popup. The service worker owns the queue
   // so there is only ever one writer; a no-op unless the user opted in.
   if (message.type === 'TRACK') {

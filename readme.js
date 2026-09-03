@@ -167,6 +167,25 @@ function buildAttemptsSection({ attempts, verdicts, firstSeenAt }) {
   return c + `\n`;
 }
 
+/**
+ * The user's own note for a problem.
+ *
+ * Emitted with the heading even when empty, so the block always exists in the
+ * file and a later edit is a section replacement rather than an insertion at
+ * a guessed position — the same reason buildSolutionsSection is shared.
+ *
+ * The note is the user's prose and goes in verbatim, but the heading sentinel
+ * must stay findable, so a note that forges one is defused.
+ */
+function buildNotesSection(note) {
+  const text = String(note ?? '').trim();
+  let c = `### NOTES\n\n`;
+  c += text
+    ? `${text.replace(/^###\s+NOTES\s*$/gim, '### NOTES​')}\n\n`
+    : `_No notes yet._\n\n`;
+  return c;
+}
+
 function generateProblemReadme(problem) {
   const {
     number, title, difficulty, tags, description, url, language,
@@ -212,6 +231,10 @@ function generateProblemReadme(problem) {
   }
 
   c += buildAttemptsSection({ attempts, verdicts, firstSeenAt });
+  c += `---\n\n`;
+
+  // ── Notes ──
+  c += buildNotesSection(problem.note);
   c += `---\n\n`;
 
   // ── Solutions Index ──
@@ -779,6 +802,6 @@ if (typeof module !== 'undefined' && module.exports) {
     buildProblemsTable, buildFooter, buildSolutionsSection, slugFromLeetCodeUrl,
     README_THEMES, SVG_PATH, PROBLEM_SVG, SVG_THEME, DIFF_FILL,
     buildCalendarSvg, CAL_PATH, LEETCODE_TOTALS,
-    buildProblemsTable, FLAT_TABLE_LIMIT,
+    buildProblemsTable, FLAT_TABLE_LIMIT, buildNotesSection, buildAttemptsSection,
   };
 }

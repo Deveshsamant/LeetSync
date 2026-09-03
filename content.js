@@ -213,6 +213,18 @@
   }
 
   /**
+   * The contest this page belongs to, or null on a normal problem page.
+   *
+   * Contest problems live at /contest/{contest}/problems/{slug}/, so the slug
+   * regex above already reads them correctly — until now the content scripts
+   * simply never ran there, which meant contest solutions were lost.
+   */
+  function getContestSlug() {
+    const match = window.location.pathname.match(/\/contest\/([^/]+)\/problems\//);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Fetch full problem details using LeetCode's public GraphQL API.
    */
   async function fetchProblemDetails(slug) {
@@ -246,6 +258,37 @@
   }
 
   // ── Submission Result Handling ─────────────────────────────
+
+  // ── Contest solutions ──────────────────────────────────────
+  //
+  // Pushing during a live contest would publish an approach while other
+  // people are still working on the same problem, and a public solutions repo
+  // makes that a real leak. Contest solves are held on the device instead and
+  // pushed when the user says so, from the popup.
+
+  const PENDING_KEY = 'pendingContest';
+  const MAX_PENDING = 40;
+
+  async function holdForContest(contest, problemData) {
+    const pending = await new Promise((resolve) => {
+      try {
+        chrome.storage.local.get([PENDING_KEY], (d) => resolve((d && d[PENDING_KEY]) || []));
+      } catch { resolve([]); }
+    });
+
+    // One entry per problem: re-solving during the contest replaces it rather
+    // than queueing the same problem twice.
+    const without = pending.filter((e) => e.data?.titleSlug !== problemData.titleSlug);
+    const next = [...without, { contest, heldAt: Date.now(), data: problemData }]
+      .slice(-MAX_PENDING);
+
+    await new Promise((resolve) => {
+      try {
+        chrome.storage.local.set({ [PENDING_KEY]: next }, resolve);
+      } catch { resolve(); }
+    });
+    return next.length;
+  }
 
   // ── Attempt log ────────────────────────────────────────────
   //
@@ -487,6 +530,22 @@
 
       // Send to background service worker for GitHub push
       if (!requireValidContext()) {
+        isProcessing = false;
+        return;
+      }
+
+      // A live contest is the one case where pushing immediately is the wrong
+      // thing: a public repo would expose the approach while others are still
+      // solving it. Hold it and let the user release it from the popup.
+      const contest = getContestSlug();
+      if (contest) {
+        const waiting = await holdForContest(contest, problemData);
+        showToast(
+          `Contest solution saved — <strong>${problemData.number}. ${problemData.title}</strong><br>` +
+          `Held back so it is not published mid-contest. ${waiting} waiting; push them from the popup.`,
+          'info',
+          8000
+        );
         isProcessing = false;
         return;
       }

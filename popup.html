@@ -199,6 +199,28 @@
       <!-- ─────────── DASHBOARD ─────────── -->
       <div class="tab-content active" id="tabDashboard" role="tabpanel" tabindex="0">
 
+        <!-- Topics ranked by how hard they were, from the attempt log -->
+        <div class="card" id="topicsCard" style="display:none;">
+          <div class="sec-label" style="margin-bottom:10px;">TOPICS TO WORK ON</div>
+          <div id="topicsList"></div>
+          <div class="form-hint" id="topicsHint" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- Contest solutions held back so nothing is published mid-contest -->
+        <div class="card" id="contestCard" style="display:none;">
+          <div class="sec-label" style="margin-bottom:8px;">CONTEST · HELD BACK</div>
+          <div class="form-hint" id="contestSummary" style="margin-bottom:10px;"></div>
+          <div id="contestList" style="margin-bottom:12px;"></div>
+          <button class="btn btn-primary" id="contestPushBtn" style="height:36px;width:100%;">
+            Push to GitHub now
+          </button>
+          <div class="form-hint" style="margin-top:8px;">
+            Held so a public repo does not expose your approach while the contest
+            is still running. Push once it has ended.
+          </div>
+          <div id="contestMsg" class="status-message" style="display:none;margin-top:10px;"></div>
+        </div>
+
         <!-- Sync status -->
         <div class="card">
           <div class="sync-head">
@@ -303,6 +325,8 @@
           <button class="filter-chip" data-filter="easy">EASY</button>
           <button class="filter-chip" data-filter="medium">MEDIUM</button>
           <button class="filter-chip" data-filter="hard">HARD</button>
+          <button class="filter-chip" data-filter="struggled" title="Took more than one attempt">STRUGGLED</button>
+          <button class="filter-chip" data-filter="stale" title="Solved over 30 days ago">STALE</button>
         </div>
         <div class="problems-list" id="problemsList"></div>
       </div>

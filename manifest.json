@@ -33,7 +33,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://leetcode.com/problems/*"
+        "https://leetcode.com/problems/*",
+        "https://leetcode.com/contest/*"
       ],
       "js": [
         "injected.js"
@@ -43,7 +44,8 @@
     },
     {
       "matches": [
-        "https://leetcode.com/problems/*"
+        "https://leetcode.com/problems/*",
+        "https://leetcode.com/contest/*"
       ],
       "js": [
         "utils.js",
