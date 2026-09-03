@@ -142,11 +142,50 @@ const Analytics = (() => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ events: batch }),
       });
-      if (!res.ok) return;                       // keep the queue, try later
+      if (!res.ok) {
+        // Keep the queue and try later, but say so: a silent failure here is
+        // indistinguishable from "nothing was ever recorded", which makes an
+        // empty dashboard impossible to diagnose.
+        console.warn('[LeetSync] analytics rejected:', res.status, await res.text().catch(() => ''));
+        return;
+      }
       await setLocal({ [QUEUE_KEY]: queue.slice(batch.length) });
-    } catch {
+    } catch (error) {
       // Offline or blocked — the queue survives, capped at MAX_QUEUE.
+      console.warn('[LeetSync] analytics could not send:', error && error.message);
     }
+  }
+
+  /**
+   * One-shot self-check for "the dashboard is empty and I do not know why".
+   * Run Analytics.debug() in the service worker console: it reports consent,
+   * the queue, and what the endpoint actually says right now.
+   */
+  async function debug() {
+    const data = await local([CONSENT_KEY, SHARE_CODE_KEY, ID_KEY, QUEUE_KEY]);
+    const state = {
+      endpointConfigured: configured(),
+      endpoint: ENDPOINT,
+      reportingEnabled: data[CONSENT_KEY] === true,
+      codeSharingEnabled: data[SHARE_CODE_KEY] === true,
+      installId: data[ID_KEY] || '(none)',
+      queued: (data[QUEUE_KEY] || []).length,
+      context: isWorker ? 'service worker' : 'page',
+    };
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ events: [] }),
+      });
+      state.endpointReachable = res.ok;
+      state.endpointStatus = res.status;
+    } catch (error) {
+      state.endpointReachable = false;
+      state.endpointError = error && error.message;
+    }
+    console.log('[LeetSync] analytics state:', state);
+    return state;
   }
 
   /** Turning it off must leave nothing behind. */
@@ -171,7 +210,7 @@ const Analytics = (() => {
   }
 
   return {
-    track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured,
+    track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE,
   };
