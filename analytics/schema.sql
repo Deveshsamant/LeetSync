@@ -37,3 +37,15 @@ CREATE INDEX IF NOT EXISTS idx_events_event   ON events(event);
 CREATE INDEX IF NOT EXISTS idx_events_install ON events(install_id);
 CREATE INDEX IF NOT EXISTS idx_events_slug    ON events(slug);
 CREATE INDEX IF NOT EXISTS idx_events_status  ON events(status);
+
+-- Claimed usernames. Separate from events so a name is unique across the
+-- whole install base rather than per row, and so releasing one is a delete
+-- rather than a rewrite of every event that carried it.
+CREATE TABLE IF NOT EXISTS names (
+  name_key   TEXT PRIMARY KEY,   -- lowercased, so casing cannot fork a claim
+  name       TEXT NOT NULL,      -- as the user typed it
+  install_id TEXT NOT NULL,
+  claimed_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_names_install ON names(install_id);

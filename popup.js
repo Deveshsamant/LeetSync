@@ -198,13 +198,51 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));
   document.getElementById('wizBack3').addEventListener('click', () => wizGoTo(2));
 
-  document.getElementById('wizNext2').addEventListener('click', () => {
-    const token = document.getElementById('wizToken').value.trim();
+  document.getElementById('wizNext2').addEventListener('click', async () => {
+    const tokenInput = document.getElementById('wizToken');
+    const nameInput = document.getElementById('wizName');
+    const nameError = document.getElementById('wizNameError');
+    const next = document.getElementById('wizNext2');
+
+    const token = tokenInput.value.trim();
+    const name = nameInput.value.trim();
+
+    tokenInput.style.borderColor = '';
+    nameInput.style.borderColor = '';
+    nameError.style.display = 'none';
+
     if (!token) {
-      document.getElementById('wizToken').style.borderColor = 'var(--error)';
+      tokenInput.style.borderColor = 'var(--error)';
       return;
     }
-    document.getElementById('wizToken').style.borderColor = '';
+    if (!name) {
+      nameInput.style.borderColor = 'var(--error)';
+      nameError.textContent = 'Pick a username to continue.';
+      nameError.style.display = 'block';
+      return;
+    }
+
+    // Uniqueness is decided by the server, so the answer has to be waited for
+    // rather than assumed — otherwise two people can walk away with the same
+    // name and only find out later.
+    next.disabled = true;
+    next.textContent = 'Checking…';
+    const claim = await Analytics.claimName(name);
+    next.disabled = false;
+    next.textContent = 'Next →';
+
+    if (!claim.ok) {
+      nameInput.style.borderColor = 'var(--error)';
+      nameError.textContent =
+        claim.reason === 'taken' ? 'That username is already taken — pick another.'
+          : claim.reason === 'invalid' ? (claim.detail || 'That username is not valid.')
+            : claim.reason === 'offline' ? 'Could not reach the server to check that name. Check your connection and try again.'
+              : 'Could not reserve that username. Try again.';
+      nameError.style.display = 'block';
+      return;
+    }
+
+    nameError.textContent = '';
     chrome.storage.sync.set({ githubToken: token });
     wizGoTo(3);
   });
@@ -1083,15 +1121,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = document.getElementById('analyticsIdRow');
     row.style.display = on ? '' : 'none';
 
-    // Code sharing and the name are meaningless while reporting is off, and
-    // showing them there would suggest the main switch already covers them.
-    for (const id of ['shareCodeRow', 'shareCodeHint', 'displayNameRow']) {
+    // Code sharing is meaningless while reporting is off, and showing it
+    // there would suggest the main switch already covers it. The username is
+    // not part of that: it is chosen at setup and stays yours either way, so
+    // it remains visible and editable.
+    for (const id of ['shareCodeRow', 'shareCodeHint']) {
       document.getElementById(id).style.display = on ? '' : 'none';
     }
 
     if (!on) {
       paintShareCodeToggle(false);
-      displayNameInput.value = '';       // setEnabled(false) cleared the stored one
       return;
     }
     chrome.storage.local.get([Analytics.ID_KEY], (data) => {
@@ -1119,14 +1158,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Analytics.displayName().then((name) => { displayNameInput.value = name || ''; });
 
-  // Saved as you leave the field rather than on every keystroke, so a
-  // half-typed name never rides out on an event.
-  displayNameInput.addEventListener('change', async () => {
-    displayNameInput.value = await Analytics.setDisplayName(displayNameInput.value);
-  });
-  displayNameInput.addEventListener('blur', async () => {
-    displayNameInput.value = await Analytics.setDisplayName(displayNameInput.value);
-  });
+  // Re-claimed as you leave the field rather than on every keystroke, so a
+  // half-typed name never reserves anything or rides out on an event.
+  let lastClaimed = null;
+  async function reclaimDisplayName() {
+    const wanted = displayNameInput.value.trim();
+    if (wanted === lastClaimed) return;
+    const error = document.getElementById('displayNameError');
+    error.style.display = 'none';
+    displayNameInput.style.borderColor = '';
+
+    const claim = await Analytics.claimName(wanted);
+    if (claim.ok) {
+      lastClaimed = claim.name || '';
+      displayNameInput.value = lastClaimed;
+      return;
+    }
+    // Keep what they typed so it can be edited, but say why it did not take
+    // and restore the name that is actually theirs.
+    displayNameInput.style.borderColor = 'var(--error)';
+    error.textContent =
+      claim.reason === 'taken' ? 'That username is already taken — pick another.'
+        : claim.reason === 'invalid' ? (claim.detail || 'That username is not valid.')
+          : claim.reason === 'offline' ? 'Could not reach the server to check that name.'
+            : 'Could not reserve that username.';
+    error.style.display = 'block';
+  }
+  Analytics.displayName().then((name) => { lastClaimed = name || ''; });
+  displayNameInput.addEventListener('change', reclaimDisplayName);
+  displayNameInput.addEventListener('blur', reclaimDisplayName);
 
   // ═══════════════════════════════════════════════════════════
   // EXPORT / IMPORT

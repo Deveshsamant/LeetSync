@@ -81,6 +81,38 @@ const Analytics = (() => {
     return cleaned;
   }
 
+  /**
+   * Reserve a username with the server, which is the only place uniqueness
+   * can be decided — two devices offline would happily pick the same one.
+   *
+   * This necessarily tells the server that an install wants a name, and setup
+   * asks for one before any usage-reporting consent exists, so the wizard says
+   * as much rather than doing it quietly. Nothing else is sent: no token, no
+   * repository, no events.
+   *
+   * Resolves to { ok, reason?, name? }. Only a confirmed claim is stored.
+   */
+  async function claimName(name) {
+    const wanted = typeof name === 'string' ? name.trim().slice(0, MAX_NAME) : '';
+    if (!configured()) {
+      // No endpoint means no shared namespace to collide in.
+      await setLocal({ [NAME_KEY]: wanted });
+      return { ok: true, name: wanted || null };
+    }
+    try {
+      const res = await fetch(`${ENDPOINT}/claim-name`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: wanted, installId: await installId() }),
+      });
+      const body = await res.json();
+      if (body && body.ok) await setLocal({ [NAME_KEY]: body.name || '' });
+      return body || { ok: false, reason: 'server' };
+    } catch (error) {
+      return { ok: false, reason: 'offline', detail: error && error.message };
+    }
+  }
+
   /** Random, not derived from anything about the user or their account. */
   async function installId() {
     const data = await local([ID_KEY]);
@@ -225,10 +257,16 @@ const Analytics = (() => {
       await installId();
       return;
     }
-    // Off means off for everything: the code consent, and the name, which is
-    // the one identifying thing here and must not survive a withdrawal.
+    // Off means nothing more is sent: the queue goes, and code sharing is
+    // revoked so re-enabling cannot silently resume it.
+    //
+    // The install id and username stay. The username is chosen at setup, is
+    // reserved against every other user, and the reservation is held by the
+    // install id — dropping the id here would strand the name with nothing
+    // able to release it. Clearing the username in Settings releases it, and
+    // that is the action that undoes the identity.
     await setLocal({ [SHARE_CODE_KEY]: false });
-    await new Promise(r => chrome.storage.local.remove([QUEUE_KEY, ID_KEY, NAME_KEY], r));
+    await new Promise(r => chrome.storage.local.remove([QUEUE_KEY], r));
   }
 
   /** Code sharing cannot be switched on while usage reporting is off. */
@@ -240,7 +278,7 @@ const Analytics = (() => {
 
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
-    displayName, setDisplayName,
+    displayName, setDisplayName, claimName,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };

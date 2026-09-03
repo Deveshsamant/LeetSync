@@ -25,6 +25,21 @@ Study-sheet ticks and your settings use Chrome's **sync** storage, so they
 follow your Chrome profile to your other signed-in devices. That transfer is
 performed by Chrome, not by us, and we cannot read it.
 
+## Your username — required at setup
+
+Connecting GitHub asks you to choose a username. It has to be unique across
+LeetSync users, and that cannot be decided on your own device, so when you
+pick one the extension sends **that name and your random install ID** to
+LeetSync's server to reserve it.
+
+This is the one thing sent before you have turned usage reporting on. Nothing
+else goes with it: not your token, not your repository, not your GitHub
+account, and no activity of any kind.
+
+Clearing the username in Settings releases the reservation. Turning usage
+reporting off stops your activity being sent but keeps the name reserved, so
+nobody else can take it while you are not using it.
+
 ## Usage reporting — optional, off by default
 
 Settings → **Usage reporting** enables anonymous usage statistics. While it is
@@ -34,11 +49,8 @@ off, nothing is collected, queued, or sent, and no identifier exists.
 
 - A random install ID generated on your device. It is not derived from your
   name, email, GitHub account, or anything else about you.
-- **A display name, only if you type one.** Settings has an optional name
-  field. Whatever you put there is sent with your usage data and shown to the
-  developer in place of the random ID. It is never prefilled and never taken
-  from your GitHub account, so leaving it blank keeps you anonymous. Switching
-  usage reporting off deletes it.
+- **Your username** — the one you chose when connecting GitHub. It labels your
+  usage data in place of the random ID.
 - The extension version, and which of the two themes you are using
 - Which features you use — which tab you open, which study sheet you select,
   when you open the tracker, export or import data, or change theme
@@ -79,9 +91,14 @@ shared, or used for advertising.
 
 ### Turning it off
 
-Switching it off immediately deletes any queued events and forgets the install
-ID. If you switch it back on later, a new unrelated ID is generated, so past
-and future data cannot be linked.
+Switching it off immediately deletes any queued events and stops anything
+further being sent. It also switches code sharing off, so turning reporting
+back on cannot silently resume it.
+
+Your install ID and username are kept, because the username is reserved
+against other users and that reservation is held by the ID — discarding it
+would leave the name stranded with no way to release it. Clear the username in
+Settings to release it and go back to being identified only by a random ID.
 
 ## Third-party services
 

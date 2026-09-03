@@ -322,6 +322,59 @@ async function dayDetail(env, date) {
   };
 }
 
+/**
+ * Usernames must be unique across every install, so the check cannot live on
+ * the device — two people would happily pick the same one offline. This is
+ * the authority: a name belongs to whichever install holds its row.
+ *
+ * Reachable without the dashboard key, like ingest, because the extension
+ * calls it during setup. It answers only "is this name yours or taken", never
+ * who holds it.
+ */
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,22}[A-Za-z0-9]$/;
+
+async function claimName(env, rawName, rawInstall) {
+  const name = str(rawName, MAX_NAME);
+  const installId = str(rawInstall, 64);
+  if (!installId) return json({ ok: false, reason: 'install id required' }, 400);
+
+  // An empty name releases whatever this install held.
+  if (!name) {
+    await env.DB.prepare('DELETE FROM names WHERE install_id = ?').bind(installId).run();
+    return json({ ok: true, name: null, released: true });
+  }
+  if (!NAME_RE.test(name)) {
+    return json({
+      ok: false,
+      reason: 'invalid',
+      detail: '3 to 24 characters: letters, digits, space, dot, underscore or hyphen.',
+    });
+  }
+
+  const key = name.toLowerCase();
+  const held = await all(env, 'SELECT install_id, name FROM names WHERE name_key = ?', key);
+
+  if (held.length && held[0].install_id !== installId) {
+    return json({ ok: false, reason: 'taken' });
+  }
+
+  // Free whatever else this install held, then claim. INSERT OR IGNORE keeps
+  // a race from throwing; the confirming read below decides the winner.
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM names WHERE install_id = ? AND name_key != ?').bind(installId, key),
+    env.DB.prepare(`INSERT OR IGNORE INTO names (name_key, name, install_id, claimed_at)
+                    VALUES (?, ?, ?, ?)`).bind(key, name, installId, Date.now()),
+    env.DB.prepare('UPDATE names SET name = ? WHERE name_key = ? AND install_id = ?')
+      .bind(name, key, installId),
+  ]);
+
+  const confirm = await all(env, 'SELECT install_id FROM names WHERE name_key = ?', key);
+  if (!confirm.length || confirm[0].install_id !== installId) {
+    return json({ ok: false, reason: 'taken' });
+  }
+  return json({ ok: true, name });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return json({ ok: true });
@@ -375,6 +428,22 @@ export default {
     }
 
     if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
+
+    // Claiming a name is a client operation, so it sits outside the read API
+    // and its key. It is still write-only from the caller's point of view.
+    if (url.pathname === '/claim-name') {
+      let claim;
+      try {
+        claim = await request.json();
+      } catch {
+        return json({ ok: false, reason: 'invalid json' }, 400);
+      }
+      try {
+        return await claimName(env, claim && claim.name, claim && claim.installId);
+      } catch (error) {
+        return json({ ok: false, reason: 'server', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
 
     const length = Number(request.headers.get('content-length') || 0);
     if (length > MAX_BODY) return json({ error: 'payload too large' }, 413);

@@ -126,10 +126,23 @@ test('pick() never carries a display name from a caller', () => {
   assert.deepEqual(Object.keys(Analytics.pick({ name: 'someone else', slug: 'two-sum' })), ['slug']);
 });
 
-test('withdrawing consent forgets the name', () => {
+test('withdrawing consent drops the queue and revokes code sharing', () => {
   const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
-  assert.match(src, /remove\(\[QUEUE_KEY, ID_KEY, NAME_KEY\]/,
-    'setEnabled(false) must drop the display name, the one identifying field');
+  assert.match(src, /remove\(\[QUEUE_KEY\]/,
+    'setEnabled(false) must drop anything still waiting to be sent');
+  assert.match(src, /setLocal\(\{ \[SHARE_CODE_KEY\]: false \}\)/,
+    'setEnabled(false) must revoke code sharing, or re-enabling would resume it');
+});
+
+test('a username can be released, which is what undoes the identity', () => {
+  // The username is reserved against other users and the reservation is held
+  // by the install id, so consent alone cannot drop either — clearing the
+  // name is the action that frees it.
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(src, /async function claimName/, 'claimName must exist');
+  const worker = readFileSync(join(__dirname, '..', 'analytics', 'worker.js'), 'utf8');
+  assert.match(worker, /if \(!name\) \{[\s\S]{0,200}DELETE FROM names WHERE install_id/,
+    'an empty name must release whatever the install held');
 });
 
 test('worker normalises an unexpected difficulty to null', () => {
