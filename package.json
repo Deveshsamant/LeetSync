@@ -8,5 +8,8 @@
     "package": "powershell -File package.ps1",
     "sheets": "python scripts/parse-sheets.py",
     "preview": "node scripts/make-preview.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.128.0"
   }
 }
