@@ -35,10 +35,29 @@ test('pick() caps field length', () => {
   assert.equal(out.title.length, 200);
 });
 
-test('analytics ships disabled — no endpoint configured', () => {
-  // A real endpoint must be a deliberate edit, never the default.
-  assert.equal(Analytics.configured(), false,
-    'ENDPOINT is set; analytics would be live for everyone on install');
+test('the endpoint is https and covered by a host permission', () => {
+  // A configured endpoint with no matching host_permission fails silently at
+  // runtime — the fetch is simply blocked — so the two must agree.
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  const endpoint = /const ENDPOINT = '([^']*)'/.exec(src)[1];
+  if (!endpoint) return;                       // unconfigured is valid too
+
+  assert.match(endpoint, /^https:\/\//, 'endpoint must be https');
+  const manifest = JSON.parse(
+    readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
+  const host = new URL(endpoint).host;
+  const covered = manifest.host_permissions.some(p => p.includes(host));
+  assert.ok(covered,
+    `manifest has no host_permission for ${host}; every send would be blocked`);
+});
+
+test('consent is off until explicitly granted', () => {
+  // Being configured must never imply being enabled.
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(src, /return on === true/,
+    'isEnabled must require an explicit true, so absent storage means off');
+  assert.match(src, /if \(!await isEnabled\(\)\) return;/,
+    'track() must bail before touching storage when consent is absent');
 });
 
 test('client batch size matches the worker limit', () => {

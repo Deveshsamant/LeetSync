@@ -2,6 +2,10 @@
 
 Opt-in usage reporting. Cloudflare Worker + D1, no third-party provider.
 
+**Deployed:** `https://leetsync-analytics.devsamant1744.workers.dev`
+D1 database `leetsync-analytics` (`4d2953f7-13e6-45a9-8924-6bbd3a3d8532`).
+Redeploy after changing `worker.js` with `deploy.cmd`.
+
 ## Deploy
 
 ```bash

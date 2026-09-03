@@ -19,9 +19,9 @@
    ============================================================ */
 
 const Analytics = (() => {
-  // Set this to your deployed Worker after `npx wrangler deploy`.
-  // While it is empty, analytics is completely inert.
-  const ENDPOINT = '';
+  // The deployed Worker. Being configured does not mean anything is sent —
+  // the consent check below still gates every call. Empty disables it wholly.
+  const ENDPOINT = 'https://leetsync-analytics.devsamant1744.workers.dev';
 
   const CONSENT_KEY = 'analyticsEnabled';
   const ID_KEY = 'analyticsInstallId';
