@@ -247,6 +247,56 @@
 
   // ── Submission Result Handling ─────────────────────────────
 
+  // ── Usage reporting ────────────────────────────────────────
+
+  /** "52 ms" -> 52. "N/A" and anything unparseable -> null. */
+  function parseRuntimeMs(text) {
+    const m = /([\d.]+)\s*(ms|s)/i.exec(String(text || ''));
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    if (!Number.isFinite(n)) return null;
+    return Math.round(m[2].toLowerCase() === 's' ? n * 1000 : n);
+  }
+
+  /** "42.1 MB" -> kilobytes. */
+  function parseMemoryKb(text) {
+    const m = /([\d.]+)\s*(kb|mb|gb)/i.exec(String(text || ''));
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    if (!Number.isFinite(n)) return null;
+    const scale = { kb: 1, mb: 1024, gb: 1024 * 1024 }[m[2].toLowerCase()];
+    return Math.round(n * scale);
+  }
+
+  /**
+   * Report the verdict of every submission, not only accepted ones — the
+   * wrong answers are the more interesting half of how people actually use
+   * this, and they never reached the analytics before.
+   *
+   * Analytics.track is a no-op unless the user opted in, so calling this
+   * unconditionally is safe. Only the slug goes out, not the title: resolving
+   * a title costs a GraphQL round trip on every failed attempt, and the
+   * dashboard already learns slug -> title from pushes.
+   */
+  function trackSubmission(result) {
+    if (!result) return;
+    const fields = {
+      status: result.status_msg || 'Unknown',
+      slug: getProblemSlug() || undefined,
+      language: (result.lang || '').toLowerCase().replace(/\s+/g, '') || undefined,
+    };
+    const runtimeMs = parseRuntimeMs(result.status_runtime);
+    const memoryKb = parseMemoryKb(result.status_memory);
+    if (runtimeMs !== null) fields.runtimeMs = runtimeMs;
+    if (memoryKb !== null) fields.memoryKb = memoryKb;
+    if (typeof result.total_correct === 'number') fields.testsPassed = result.total_correct;
+    if (typeof result.total_testcases === 'number') fields.testsTotal = result.total_testcases;
+
+    try {
+      chrome.runtime.sendMessage({ type: 'TRACK', event: 'submission', fields });
+    } catch { /* extension context gone; reporting must never throw */ }
+  }
+
   /**
    * Called when injected.js detects an accepted submission result.
    * This is the main flow — scrape data and push to GitHub.
@@ -445,6 +495,8 @@
     if (msg.type === '__LC_PUSHER_RESULT__') {
       const result = msg.result;
       console.log('[LeetSync] Received result:', result?.status_msg);
+
+      trackSubmission(result);
 
       if (result?.status_msg === 'Accepted') {
         console.log('[LeetSync] ✅ ACCEPTED — starting GitHub push');

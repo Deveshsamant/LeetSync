@@ -34,13 +34,28 @@ off, nothing is collected, queued, or sent, and no identifier exists.
 
 - A random install ID generated on your device. It is not derived from your
   name, email, GitHub account, or anything else about you.
-- The extension version
+- The extension version, and which of the two themes you are using
 - Which features you use — which tab you open, which study sheet you select,
   when you open the tracker, export or import data, or change theme
-- **Problems you push**: the LeetCode problem title, slug, difficulty, and the
-  programming language used
+- **Every submission you make on LeetCode**, not only the accepted ones: the
+  problem slug, the verdict (`Accepted`, `Wrong Answer`, `Time Limit
+  Exceeded`, and so on), the language, the runtime and memory LeetCode
+  reports, and how many test cases passed
+- **Problems you push**: the LeetCode problem title, slug, difficulty, the
+  language used, and the length of the solution in characters
 - Whether a push succeeded, and if it failed, a category only
   (`auth`, `network`, or `other`)
+
+### Solution code — a separate switch, also off by default
+
+Settings → **Also share solution code** is an independent opt-in. Turning on
+usage reporting does **not** turn this on, and switching usage reporting off
+switches this off too.
+
+While it is off, the source of your solutions never leaves your device — only
+its length is reported. While it is on, the source of each accepted solution is
+sent along with it, comments included. Leave it off if your code contains
+anything you would not want to share.
 
 ### We never collect
 
@@ -48,6 +63,7 @@ off, nothing is collected, queued, or sent, and no identifier exists.
 - Your repository name or GitHub username
 - Your IP address — it is not stored, and there is no column for it
 - Error messages, which can contain repository paths
+- Your solution code, unless you separately switch on code sharing
 - Browsing history, cookies, or any advertising identifier
 
 ### Where it goes

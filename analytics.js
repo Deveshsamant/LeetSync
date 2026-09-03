@@ -5,13 +5,18 @@
    on in Settings, and turning it off clears the queue and forgets the
    install id, so re-enabling starts a new one.
 
-   What is sent: a random install id, the extension version, which feature
-   was used, and — because problem-level detail was asked for — the LeetCode
-   slug, title, difficulty and language of pushed solutions.
+   What is sent once usage reporting is on: a random install id, the
+   extension version, which feature was used, the chosen theme, and — for
+   each submission — the LeetCode slug, title, difficulty, language, verdict
+   ("Accepted", "Wrong Answer", ...), runtime, memory and testcase counts.
 
    What is never sent: the GitHub token, the repository name, the GitHub
    username, or any error text (failures are reduced to a category, since
    messages can contain a repo path).
+
+   Solution source code is a SEPARATE opt-in (see sharesCode). Usage
+   reporting does not carry it and enabling usage reporting does not enable
+   it, because code is user-authored content rather than a usage signal.
 
    Loaded by both the service worker (importScripts) and the popup (<script>).
    The service worker owns the queue; the popup forwards through it, so there
@@ -24,11 +29,13 @@ const Analytics = (() => {
   const ENDPOINT = 'https://leetsync-analytics.devsamant1744.workers.dev';
 
   const CONSENT_KEY = 'analyticsEnabled';
+  const SHARE_CODE_KEY = 'analyticsShareCode';
   const ID_KEY = 'analyticsInstallId';
   const QUEUE_KEY = 'analyticsQueue';
 
   const MAX_QUEUE = 200;   // events kept while offline; oldest dropped past this
   const BATCH = 50;        // must match the Worker's MAX_BATCH
+  const MAX_CODE = 20000;  // characters of source, when code sharing is on
 
   const isWorker = typeof window === 'undefined';
   const configured = () => typeof ENDPOINT === 'string' && ENDPOINT.startsWith('https://');
@@ -39,6 +46,16 @@ const Analytics = (() => {
   async function isEnabled() {
     const { [CONSENT_KEY]: on } = await local([CONSENT_KEY]);
     return on === true;                       // absent means off
+  }
+
+  /**
+   * Second, independent consent. Source code is the user's own work and can
+   * carry names or notes in comments, so it needs its own yes — one the
+   * general usage toggle never grants.
+   */
+  async function sharesCode() {
+    const { [SHARE_CODE_KEY]: on } = await local([SHARE_CODE_KEY]);
+    return on === true;
   }
 
   /** Random, not derived from anything about the user or their account. */
@@ -77,19 +94,35 @@ const Analytics = (() => {
       ...pick(fields),
     };
 
+    // Attached only under its own consent, and only when a caller offered it.
+    if (typeof fields.code === 'string' && fields.code && await sharesCode()) {
+      entry.code = fields.code.slice(0, MAX_CODE);
+    }
+
     const { [QUEUE_KEY]: queue = [] } = await local([QUEUE_KEY]);
     queue.push(entry);
     // Keep the newest; an old backlog is worth less than a bounded store.
     await setLocal({ [QUEUE_KEY]: queue.slice(-MAX_QUEUE) });
   }
 
-  /** Only these fields ever leave the device. */
+  // Only these fields ever leave the device. `code` is deliberately absent:
+  // it is handled above, behind its own consent check.
+  const TEXT_FIELDS = ['slug', 'title', 'difficulty', 'language', 'detail', 'status', 'theme'];
+  const NUM_FIELDS = ['runtimeMs', 'memoryKb', 'testsPassed', 'testsTotal', 'codeLen'];
+
   function pick(fields) {
     const out = {};
-    for (const key of ['slug', 'title', 'difficulty', 'language', 'detail']) {
+    for (const key of TEXT_FIELDS) {
       if (typeof fields[key] === 'string' && fields[key]) {
         out[key] = fields[key].slice(0, 200);
       }
+    }
+    for (const key of NUM_FIELDS) {
+      // Strings are not coerced: a number field arriving as text means the
+      // caller is confused, and guessing would store a wrong figure.
+      if (typeof fields[key] !== 'number' || !Number.isFinite(fields[key])) continue;
+      if (fields[key] < 0) continue;
+      out[key] = Math.round(fields[key]);
     }
     return out;
   }
@@ -125,10 +158,23 @@ const Analytics = (() => {
       await installId();
       return;
     }
+    // Off means off for everything, including the separate code consent.
+    await setLocal({ [SHARE_CODE_KEY]: false });
     await new Promise(r => chrome.storage.local.remove([QUEUE_KEY, ID_KEY], r));
   }
 
-  return { track, flush, isEnabled, setEnabled, configured, CONSENT_KEY, QUEUE_KEY, ID_KEY, pick, MAX_QUEUE, BATCH };
+  /** Code sharing cannot be switched on while usage reporting is off. */
+  async function setShareCode(on) {
+    const allowed = on === true && await isEnabled();
+    await setLocal({ [SHARE_CODE_KEY]: allowed });
+    return allowed;
+  }
+
+  return {
+    track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured,
+    CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY,
+    pick, MAX_QUEUE, BATCH, MAX_CODE,
+  };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { Analytics };

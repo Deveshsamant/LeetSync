@@ -11,13 +11,22 @@
  *   npx wrangler deploy
  */
 
-const MAX_BATCH = 50;             // events per request
-const MAX_BODY = 64 * 1024;       // 64 KB — a full batch is far smaller
+const MAX_BATCH = 50;              // events per request
+const MAX_BODY = 2 * 1024 * 1024;  // a batch carrying code can reach ~1 MB
+const MAX_CODE = 20000;            // must match the client's cap
 const EVENTS = new Set([
   'install', 'update', 'push_ok', 'push_fail', 'tab', 'sheet', 'tracker',
-  'export', 'import', 'theme', 'repo_setup',
+  'export', 'import', 'theme', 'repo_setup', 'submission', 'session',
 ]);
 const DIFFICULTIES = new Set(['Easy', 'Medium', 'Hard', 'Unknown']);
+const THEMES = new Set(['dark', 'light']);
+// LeetCode's verdicts. Anything outside this becomes 'Other' rather than
+// being stored verbatim, so a changed upstream string cannot inject values.
+const STATUSES = new Set([
+  'Accepted', 'Wrong Answer', 'Time Limit Exceeded', 'Memory Limit Exceeded',
+  'Output Limit Exceeded', 'Runtime Error', 'Compile Error', 'Internal Error',
+  'Unknown',
+]);
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -36,6 +45,11 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 const str = (v, max) =>
   (typeof v === 'string' && v.trim()) ? v.trim().slice(0, max) : null;
 
+/** Numbers only — a numeric field arriving as text is a bug, not a value. */
+const num = (v, max) =>
+  (typeof v === 'number' && Number.isFinite(v) && v >= 0)
+    ? Math.min(Math.round(v), max) : null;
+
 /**
  * Accept only the fields the schema knows about. A client that starts sending
  * something new cannot widen what gets stored without the Worker being updated
@@ -50,6 +64,8 @@ function clean(raw) {
   if (!installId) return null;
 
   const difficulty = str(raw.difficulty, 16);
+  const status = str(raw.status, 32);
+  const theme = str(raw.theme, 16);
 
   return {
     install_id: installId,
@@ -60,6 +76,16 @@ function clean(raw) {
     difficulty: DIFFICULTIES.has(difficulty) ? difficulty : null,
     language: str(raw.language, 32),
     detail: str(raw.detail, 200),
+    status: status ? (STATUSES.has(status) ? status : 'Other') : null,
+    theme: THEMES.has(theme) ? theme : null,
+    runtime_ms: num(raw.runtimeMs, 3600000),
+    memory_kb: num(raw.memoryKb, 8388608),
+    tests_passed: num(raw.testsPassed, 1000000),
+    tests_total: num(raw.testsTotal, 1000000),
+    code_len: num(raw.codeLen, 10000000),
+    // Present only when the device has the separate code-sharing consent on;
+    // the client omits it otherwise, so there is nothing here to strip.
+    code: str(raw.code, MAX_CODE),
     client_ts: Number.isFinite(raw.ts) ? Math.floor(raw.ts) : null,
   };
 }
@@ -87,29 +113,39 @@ function authorised(request, env) {
 const all = async (env, sql, ...binds) =>
   (await env.DB.prepare(sql).bind(...binds).all()).results || [];
 
-/** Everything the dashboard renders, in one round trip. */
+/** Everything the dashboard's overview renders, in one round trip. */
 async function summary(env, days) {
   const since = Date.now() - days * 86400000;
 
-  const [totals, daily, events, problems, difficulty, languages, versions, failures, sheets] =
+  const [totals, daily, events, problems, difficulty, languages, versions,
+         failures, sheets, statuses, themes, perf] =
     await Promise.all([
       all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
                        MIN(ts) AS first_seen, MAX(ts) AS last_seen
                 FROM events WHERE ts >= ?`, since),
       all(env, `SELECT date(ts/1000,'unixepoch') AS day,
-                       COUNT(DISTINCT install_id) AS installs, COUNT(*) AS events
+                       COUNT(DISTINCT install_id) AS installs, COUNT(*) AS events,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted
                 FROM events WHERE ts >= ? GROUP BY day ORDER BY day`, since),
       all(env, `SELECT event, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
                 FROM events WHERE ts >= ? GROUP BY event ORDER BY n DESC`, since),
-      all(env, `SELECT slug, title, difficulty, COUNT(*) AS pushes,
+      // Title and difficulty ride on push_ok rows, so MAX() fills them in for
+      // the submission rows of the same slug, which carry only the slug.
+      all(env, `SELECT slug,
+                       MAX(title) AS title,
+                       MAX(difficulty) AS difficulty,
+                       SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS attempts,
+                       SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                       SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
                        COUNT(DISTINCT install_id) AS installs
-                FROM events WHERE ts >= ? AND event='push_ok' AND slug IS NOT NULL
-                GROUP BY slug ORDER BY pushes DESC LIMIT 25`, since),
+                FROM events WHERE ts >= ? AND slug IS NOT NULL
+                GROUP BY slug ORDER BY attempts DESC, pushes DESC LIMIT 50`, since),
       all(env, `SELECT COALESCE(difficulty,'Unknown') AS difficulty, COUNT(*) AS n
                 FROM events WHERE ts >= ? AND event='push_ok'
                 GROUP BY difficulty ORDER BY n DESC`, since),
       all(env, `SELECT language, COUNT(*) AS n FROM events
-                WHERE ts >= ? AND event='push_ok' AND language IS NOT NULL
+                WHERE ts >= ? AND event='submission' AND language IS NOT NULL
                 GROUP BY language ORDER BY n DESC LIMIT 12`, since),
       all(env, `SELECT COALESCE(version,'unknown') AS version,
                        COUNT(DISTINCT install_id) AS installs
@@ -120,6 +156,28 @@ async function summary(env, days) {
       all(env, `SELECT detail AS sheet, COUNT(DISTINCT install_id) AS installs
                 FROM events WHERE ts >= ? AND event='sheet' AND detail IS NOT NULL
                 GROUP BY sheet ORDER BY installs DESC LIMIT 10`, since),
+      all(env, `SELECT status, COUNT(*) AS n, COUNT(DISTINCT install_id) AS installs
+                FROM events WHERE ts >= ? AND event='submission' AND status IS NOT NULL
+                GROUP BY status ORDER BY n DESC`, since),
+      // Each install counted once, at whatever theme it last reported, so
+      // switching themes cannot inflate the losing side.
+      all(env, `SELECT theme, COUNT(*) AS installs FROM (
+                  SELECT install_id, theme, MAX(ts) FROM events
+                  WHERE ts >= ? AND theme IS NOT NULL GROUP BY install_id
+                ) GROUP BY theme ORDER BY installs DESC`, since),
+      // Difficulty arrives on push_ok rows while runtime and memory arrive on
+      // submission rows, so this has to resolve difficulty through the slug —
+      // asking one row for both would match nothing.
+      all(env, `SELECT d.difficulty AS difficulty,
+                       AVG(CASE WHEN e.status='Accepted' THEN e.runtime_ms END) AS avg_runtime,
+                       AVG(CASE WHEN e.status='Accepted' THEN e.memory_kb END) AS avg_memory,
+                       AVG(e.code_len) AS avg_code_len,
+                       SUM(CASE WHEN e.status='Accepted' THEN 1 ELSE 0 END) AS n
+                FROM events e
+                JOIN (SELECT slug, MAX(difficulty) AS difficulty FROM events
+                      WHERE difficulty IS NOT NULL GROUP BY slug) d ON d.slug = e.slug
+                WHERE e.ts >= ?
+                GROUP BY d.difficulty`, since),
     ]);
 
   return {
@@ -127,7 +185,72 @@ async function summary(env, days) {
     generatedAt: Date.now(),
     totals: totals[0] || { events: 0, installs: 0 },
     daily, events, problems, difficulty, languages, versions, failures, sheets,
+    statuses, themes, perf,
   };
+}
+
+/** One row per install, for the user list. */
+async function users(env, days) {
+  const since = Date.now() - days * 86400000;
+  const [rows, themeRows] = await Promise.all([
+    all(env, `SELECT install_id,
+                     COUNT(*) AS events,
+                     MIN(ts) AS first_seen, MAX(ts) AS last_seen,
+                     SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                     SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                     SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                     COUNT(DISTINCT slug) AS problems,
+                     MAX(version) AS version,
+                     SUM(CASE WHEN code IS NULL THEN 0 ELSE 1 END) AS code_shared
+              FROM events WHERE ts >= ?
+              GROUP BY install_id ORDER BY last_seen DESC LIMIT 200`, since),
+    all(env, `SELECT install_id, theme, MAX(ts) FROM events
+              WHERE ts >= ? AND theme IS NOT NULL GROUP BY install_id`, since),
+  ]);
+  const themeOf = new Map(themeRows.map(r => [r.install_id, r.theme]));
+  return {
+    days,
+    generatedAt: Date.now(),
+    users: rows.map(r => ({ ...r, theme: themeOf.get(r.install_id) || null })),
+  };
+}
+
+/** One install's activity, newest first. Code is fetched separately. */
+async function userDetail(env, installId, limit) {
+  const [profile, timeline, langs] = await Promise.all([
+    all(env, `SELECT COUNT(*) AS events, MIN(ts) AS first_seen, MAX(ts) AS last_seen,
+                     SUM(CASE WHEN event='submission' THEN 1 ELSE 0 END) AS submissions,
+                     SUM(CASE WHEN status='Accepted' THEN 1 ELSE 0 END) AS accepted,
+                     SUM(CASE WHEN event='push_ok' THEN 1 ELSE 0 END) AS pushes,
+                     COUNT(DISTINCT slug) AS problems, MAX(version) AS version
+              FROM events WHERE install_id = ?`, installId),
+    all(env, `SELECT id, ts, event, slug, title, difficulty, language, status,
+                     detail, version, theme, runtime_ms, memory_kb,
+                     tests_passed, tests_total, code_len,
+                     CASE WHEN code IS NULL THEN 0 ELSE 1 END AS has_code
+              FROM events WHERE install_id = ? ORDER BY ts DESC LIMIT ?`, installId, limit),
+    all(env, `SELECT language, COUNT(*) AS n FROM events
+              WHERE install_id = ? AND language IS NOT NULL
+              GROUP BY language ORDER BY n DESC LIMIT 8`, installId),
+  ]);
+  return {
+    installId,
+    generatedAt: Date.now(),
+    profile: profile[0] || {},
+    timeline,
+    languages: langs,
+  };
+}
+
+/** The raw event feed, newest first. */
+async function activity(env, days, limit) {
+  const since = Date.now() - days * 86400000;
+  const rows = await all(env,
+    `SELECT id, ts, install_id, event, slug, title, difficulty, language, status,
+            detail, version, runtime_ms, memory_kb, tests_passed, tests_total,
+            code_len, CASE WHEN code IS NULL THEN 0 ELSE 1 END AS has_code
+     FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT ?`, since, limit);
+  return { days, generatedAt: Date.now(), rows };
 }
 
 export default {
@@ -135,12 +258,37 @@ export default {
     if (request.method === 'OPTIONS') return json({ ok: true });
 
     const url = new URL(request.url);
+    const int = (name, dflt, lo, hi) =>
+      Math.min(Math.max(Number(url.searchParams.get(name)) || dflt, lo), hi);
 
-    if (url.pathname === '/api/summary') {
+    if (url.pathname.startsWith('/api/')) {
       if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
-      const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 30, 1), 365);
+      const days = int('days', 30, 1, 365);
       try {
-        return json(await summary(env, days));
+        if (url.pathname === '/api/summary') return json(await summary(env, days));
+        if (url.pathname === '/api/users') return json(await users(env, days));
+        if (url.pathname === '/api/activity') {
+          return json(await activity(env, days, int('limit', 200, 1, 1000)));
+        }
+
+        if (url.pathname === '/api/user') {
+          const id = str(url.searchParams.get('id'), 64);
+          if (!id) return json({ error: 'id required' }, 400);
+          return json(await userDetail(env, id, int('limit', 300, 1, 1000)));
+        }
+
+        if (url.pathname === '/api/code') {
+          const id = Number(url.searchParams.get('id'));
+          if (!Number.isFinite(id)) return json({ error: 'id required' }, 400);
+          const rows = await all(env,
+            `SELECT id, ts, install_id, slug, title, language, status, code
+             FROM events WHERE id = ?`, Math.floor(id));
+          if (!rows.length) return json({ error: 'not found' }, 404);
+          if (rows[0].code === null) return json({ error: 'no code stored for this event' }, 404);
+          return json(rows[0]);
+        }
+
+        return json({ error: 'unknown endpoint' }, 404);
       } catch (error) {
         return json({ error: 'query failed', detail: String(error).slice(0, 200) }, 500);
       }
@@ -167,14 +315,18 @@ export default {
     const now = Date.now();
     const stmt = env.DB.prepare(
       `INSERT INTO events
-        (ts, client_ts, install_id, event, version, slug, title, difficulty, language, detail)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (ts, client_ts, install_id, event, version, slug, title, difficulty,
+         language, detail, status, theme, runtime_ms, memory_kb,
+         tests_passed, tests_total, code_len, code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     try {
       await env.DB.batch(rows.map(r => stmt.bind(
         now, r.client_ts, r.install_id, r.event, r.version,
-        r.slug, r.title, r.difficulty, r.language, r.detail
+        r.slug, r.title, r.difficulty, r.language, r.detail,
+        r.status, r.theme, r.runtime_ms, r.memory_kb,
+        r.tests_passed, r.tests_total, r.code_len, r.code
       )));
     } catch (error) {
       // The extension retries, so a failure here must be visible to it.

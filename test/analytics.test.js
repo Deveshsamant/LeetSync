@@ -105,8 +105,9 @@ test('worker stores no field outside the schema', () => {
     githubToken: 'ghp_secret', repo: 'me/solutions', ip: '1.2.3.4', email: 'a@b.c',
   });
   assert.deepEqual(Object.keys(row).sort(), [
-    'client_ts', 'detail', 'difficulty', 'event', 'install_id',
-    'language', 'slug', 'title', 'version',
+    'client_ts', 'code', 'code_len', 'detail', 'difficulty', 'event',
+    'install_id', 'language', 'memory_kb', 'runtime_ms', 'slug', 'status',
+    'tests_passed', 'tests_total', 'theme', 'title', 'version',
   ]);
   assert.equal(JSON.stringify(row).includes('ghp_secret'), false);
 });
@@ -137,5 +138,89 @@ test('the schema has no column for identifying data', () => {
   // and confirm the expected ones are all there
   for (const expected of ['install_id', 'event', 'slug', 'difficulty']) {
     assert.ok(columns.includes(expected), `schema.sql is missing "${expected}"`);
+  }
+});
+
+// ── Solution code is a second, separate consent ──────────────
+
+test('pick() never carries code, whatever the caller passes', () => {
+  // track() attaches code itself, after its own consent check. If pick()
+  // also passed it through, the usage toggle alone would ship source.
+  const out = Analytics.pick({ code: 'class Solution { /* mine */ }', slug: 'two-sum' });
+  assert.deepEqual(Object.keys(out), ['slug']);
+});
+
+test('code is attached only behind its own consent check', () => {
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(src, /await sharesCode\(\)/,
+    'track() must consult sharesCode() before attaching source');
+  assert.match(src, /sharesCode[\s\S]{0,260}?return on === true/,
+    'sharesCode must require an explicit true, so absent storage means off');
+  // Switching reporting off has to revoke code sharing too, or it would
+  // silently resume the moment reporting came back on.
+  assert.match(src, /setLocal\(\{ \[SHARE_CODE_KEY\]: false \}\)/,
+    'setEnabled(false) must clear the code-sharing consent');
+});
+
+test('code sharing cannot outlive usage reporting', () => {
+  const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(src, /on === true && await isEnabled\(\)/,
+    'setShareCode must refuse while usage reporting is off');
+});
+
+test('client and worker agree on the code cap', () => {
+  const worker = readFileSync(join(__dirname, '..', 'analytics', 'worker.js'), 'utf8');
+  const cap = Number(/MAX_CODE\s*=\s*(\d+)/.exec(worker)[1]);
+  assert.equal(Analytics.MAX_CODE, cap,
+    'a client cap above the worker cap would silently truncate stored code');
+});
+
+// ── Numbers and enums ────────────────────────────────────────
+
+test('pick() takes real numbers and refuses numeric strings', () => {
+  assert.deepEqual(Analytics.pick({ runtimeMs: 52, memoryKb: 43110 }),
+    { runtimeMs: 52, memoryKb: 43110 });
+  // A number arriving as text means the caller is confused; guessing would
+  // store a figure nobody measured.
+  assert.deepEqual(Analytics.pick({ runtimeMs: '52', testsPassed: -3 }), {});
+});
+
+test('worker folds an unrecognised verdict into Other', () => {
+  assert.equal(clean({ installId: 'a', event: 'submission', status: 'Accepted' }).status, 'Accepted');
+  assert.equal(clean({ installId: 'a', event: 'submission', status: 'Wrong Answer' }).status, 'Wrong Answer');
+  // Upstream is free to invent verdicts; none of them become new column values.
+  assert.equal(clean({ installId: 'a', event: 'submission', status: 'Banana' }).status, 'Other');
+  assert.equal(clean({ installId: 'a', event: 'submission' }).status, null);
+});
+
+test('worker accepts only the two real themes', () => {
+  assert.equal(clean({ installId: 'a', event: 'session', theme: 'light' }).theme, 'light');
+  assert.equal(clean({ installId: 'a', event: 'session', theme: 'cyberpunk' }).theme, null);
+});
+
+test('worker accepts the new event names', () => {
+  for (const event of ['submission', 'session']) {
+    assert.ok(clean({ installId: 'a', event }), `${event} must be storable`);
+  }
+});
+
+test('worker truncates oversized code rather than rejecting the row', () => {
+  const row = clean({ installId: 'a', event: 'push_ok', code: 'x'.repeat(50000) });
+  assert.equal(row.code.length, 20000);
+});
+
+test('every column clean() emits exists in the schema', () => {
+  // A field the Worker builds but the table lacks fails at INSERT, in
+  // production, on a live batch.
+  const schema = readFileSync(join(__dirname, '..', 'analytics', 'schema.sql'), 'utf8');
+  const columns = new Set(schema
+    .replace(/--[^\n]*/g, '')
+    .split('\n')
+    .map(l => l.trim().split(/\s+/)[0].toLowerCase())
+    .filter(Boolean));
+
+  const row = clean({ installId: 'a', event: 'submission' });
+  for (const key of Object.keys(row)) {
+    assert.ok(columns.has(key), `clean() emits "${key}" but schema.sql has no such column`);
   }
 });

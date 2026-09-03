@@ -665,12 +665,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return theme;
   }
 
+  const currentUITheme = () =>
+    document.body.classList.contains('theme-light') ? 'light' : DEFAULT_UI_THEME;
+
   function loadUITheme() {
     chrome.storage.sync.get(['uiTheme'], (data) => {
       const stored = data.uiTheme;
       const applied = applyUITheme(stored);
       // Migrate anyone still on a retired theme so the choice persists
       if (stored !== applied) chrome.storage.sync.set({ uiTheme: applied });
+      // One per popup open. A change-only 'theme' event can say what people
+      // switch to but never what they actually sit on, which is the question
+      // worth answering.
+      Analytics.track('session', { theme: applied });
     });
   }
 
@@ -1057,6 +1064,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // USAGE REPORTING (opt-in)
   // ═══════════════════════════════════════════════════════════
   const analyticsToggle = document.getElementById('analyticsToggle');
+  const shareCodeToggle = document.getElementById('shareCodeToggle');
+
+  function paintShareCodeToggle(on) {
+    shareCodeToggle.classList.toggle('on', on);
+    shareCodeToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+  }
 
   function paintAnalyticsToggle(on) {
     analyticsToggle.classList.toggle('on', on);
@@ -1065,20 +1078,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shown only while reporting is on, so a deletion request can quote it.
     const row = document.getElementById('analyticsIdRow');
     row.style.display = on ? '' : 'none';
-    if (!on) return;
+
+    // Code sharing is meaningless while reporting is off, and showing it
+    // there would suggest the main switch already covers it.
+    for (const id of ['shareCodeRow', 'shareCodeHint']) {
+      document.getElementById(id).style.display = on ? '' : 'none';
+    }
+
+    if (!on) {
+      paintShareCodeToggle(false);
+      return;
+    }
     chrome.storage.local.get([Analytics.ID_KEY], (data) => {
       document.getElementById('analyticsId').textContent = data?.[Analytics.ID_KEY] || '—';
     });
   }
 
   Analytics.isEnabled().then(paintAnalyticsToggle);
+  Analytics.sharesCode().then(paintShareCodeToggle);
 
   analyticsToggle.addEventListener('click', async () => {
     const next = !analyticsToggle.classList.contains('on');
     await Analytics.setEnabled(next);
     paintAnalyticsToggle(next);          // after setEnabled, so the id exists
     // Recorded only when switching on — the off path must send nothing.
-    if (next) Analytics.track('theme', { detail: 'analytics_enabled' });
+    if (next) Analytics.track('session', { detail: 'analytics_enabled', theme: currentUITheme() });
+  });
+
+  shareCodeToggle.addEventListener('click', async () => {
+    // setShareCode refuses while reporting is off, so trust what it returns
+    // rather than assuming the flip took.
+    const granted = await Analytics.setShareCode(!shareCodeToggle.classList.contains('on'));
+    paintShareCodeToggle(granted);
   });
 
   // ═══════════════════════════════════════════════════════════

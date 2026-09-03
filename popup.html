@@ -444,13 +444,27 @@
           </div>
           <div class="form-hint" style="margin-top:8px;">
             Off unless you turn it on. When on, LeetSync sends a random ID, the
-            extension version, which features you use, and the problems you push
-            — title, difficulty and language. It never sends your token,
-            repository, or GitHub username. Turning it off deletes the queue and
-            forgets the ID.
+            extension version, your theme, which features you use, and every
+            submission result — problem, difficulty, language, verdict, runtime
+            and memory. It never sends your token, repository, or GitHub
+            username. Turning it off deletes the queue and forgets the ID.
             <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
                target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
           </div>
+
+          <div class="set-row" id="shareCodeRow" style="padding:6px 0;display:none;">
+            <span>Also share solution code</span>
+            <button class="toggle-track" id="shareCodeToggle" type="button"
+                    role="switch" aria-checked="false" aria-label="Also share solution code">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <div class="form-hint" id="shareCodeHint" style="margin-top:8px;display:none;">
+            Separate, and off even when the switch above is on. When enabled,
+            the source of each accepted solution is sent with it — comments
+            included, so leave this off if your code carries anything personal.
+          </div>
+
           <div class="about-row" id="analyticsIdRow" style="display:none;">
             <span>Your install ID</span>
             <span class="about-version" id="analyticsId"></span>

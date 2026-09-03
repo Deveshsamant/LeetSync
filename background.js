@@ -535,6 +535,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           title: message.data?.title,
           difficulty: message.data?.difficulty,
           language: message.data?.language,
+          codeLen: typeof message.data?.code === 'string' ? message.data.code.length : undefined,
+          // Offered, not sent: pick() drops `code` unless the separate
+          // code-sharing consent is on. Runtime and memory ride the
+          // `submission` event instead, so they are not repeated here.
+          code: message.data?.code,
         }).catch(() => {});
         // On success, also try processing any queued items
         processOfflineQueue().catch(() => {});

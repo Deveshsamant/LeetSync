@@ -49,3 +49,39 @@ committed non-empty.
 
 100,000 requests/day and 5 GB of D1 storage. Events are batched up to 50 per
 request and flushed every 30 minutes, so a few thousand users sit far inside it.
+
+## The dashboard
+
+It lives in its own repository, `../leetsync-dashboard`, so it can be deployed
+privately without publishing it alongside the extension. See the README there.
+
+## Read API
+
+Every `/api/*` route needs `Authorization: Bearer $DASHBOARD_KEY`, set with
+`wrangler secret put DASHBOARD_KEY`. Without the secret the read API stays
+closed rather than open.
+
+| Route | Returns |
+| --- | --- |
+| `/api/summary?days=30` | Totals, daily series, verdicts, themes, languages, versions, failures, sheets, per-difficulty averages, top 50 problems |
+| `/api/users?days=30` | One row per install: submissions, acceptance, pushes, distinct problems, theme, version |
+| `/api/user?id=<install>&limit=300` | One install's profile, language mix, and event timeline |
+| `/api/activity?days=30&limit=200` | The raw event feed, newest first |
+| `/api/code?id=<event id>` | The stored solution for one event, 404 when none was shared |
+
+## Migrations
+
+`schema.sql` is the current shape, for a fresh database. `migrations/` holds
+the steps to bring an existing one forward; run one with:
+
+```bash
+npx wrangler d1 execute leetsync-analytics --remote --file=migrations/001_richer_events.sql
+```
+
+## Two allowlists, on purpose
+
+`pick()` in `../analytics.js` decides what may leave the device; `clean()` in
+`worker.js` decides what may be stored. Both must be widened for a new field to
+reach the database, and `schema.sql` has no column for anything identifying.
+Solution code is gated a third time, behind its own consent, and is the only
+user-authored content the table can hold.
