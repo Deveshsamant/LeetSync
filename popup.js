@@ -1072,25 +1072,87 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * A note field for one problem, saved on blur.
+   *
+   * Built with DOM calls rather than innerHTML: the note is the user's own
+   * prose and gets written straight back into the field, so it must never be
+   * parsed as markup on the way through.
+   */
+  function buildNoteEditor(problem) {
+    const wrap = document.createElement('div');
+    wrap.className = 'note-editor';
+
+    const label = document.createElement('div');
+    label.className = 'note-label';
+    label.textContent = 'YOUR NOTES';
+
+    const status = document.createElement('span');
+    status.className = 'note-status';
+    label.appendChild(status);
+
+    const area = document.createElement('textarea');
+    area.className = 'note-input';
+    area.rows = 3;
+    area.maxLength = 4000;
+    area.placeholder = 'Approach, edge cases, why the first attempt failed…';
+    area.value = problem.note || '';
+
+    let saved = area.value;
+    area.addEventListener('blur', () => {
+      const next = area.value.trim();
+      if (next === saved.trim()) return;
+      status.textContent = 'Saving…';
+      chrome.runtime.sendMessage(
+        { type: 'SET_NOTE', problemNumber: problem.number, note: next },
+        (res) => {
+          if (chrome.runtime.lastError || !res?.success) {
+            status.textContent = 'Not saved';
+            return;
+          }
+          saved = next;
+          problem.note = next;
+          // Say which happened — a note kept only on this device is a
+          // different outcome from one that reached the repo.
+          status.textContent = res.pushed ? 'Saved to GitHub' : 'Saved locally';
+          setTimeout(() => { status.textContent = ''; }, 2200);
+        }
+      );
+    });
+
+    wrap.append(label, area);
+    return wrap;
+  }
+
   function loadSolutions(problem, panel, card) {
-    panel.innerHTML = '<div class="solutions-loading">Loading solutions...</div>';
+    // The note lives on this device and is editable whether or not GitHub
+    // answers, so it is rendered up front and the solutions list fills in
+    // beneath it. Putting it inside the success path meant an empty or failed
+    // fetch hid the note field entirely.
+    panel.innerHTML = '';
+    panel.appendChild(buildNoteEditor(problem));
+
+    const list = document.createElement('div');
+    list.className = 'solutions-list';
+    list.innerHTML = '<div class="solutions-loading">Loading solutions...</div>';
+    panel.appendChild(list);
 
     chrome.runtime.sendMessage({
       type: 'GET_SOLUTIONS',
       folderName: problem.folderName,
     }, (response) => {
       if (chrome.runtime.lastError || !response?.success) {
-        panel.innerHTML = '<div class="solutions-loading">Failed to load</div>';
+        list.innerHTML = '<div class="solutions-loading">Failed to load</div>';
         return;
       }
 
       const sols = response.solutions;
       if (sols.length === 0) {
-        panel.innerHTML = '<div class="solutions-loading">No solution files found</div>';
+        list.innerHTML = '<div class="solutions-loading">No solution files found</div>';
         return;
       }
 
-      panel.innerHTML = '';
+      list.innerHTML = '';
       sols.forEach((sol, idx) => {
         const solItem = document.createElement('div');
         solItem.className = 'solution-item';
@@ -1170,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         });
 
-        panel.appendChild(solItem);
+        list.appendChild(solItem);
       });
     });
   }

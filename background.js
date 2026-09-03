@@ -791,6 +791,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === 'SET_NOTE') {
+    setProblemNote(message.problemNumber, message.note)
+      .then(sendResponse)
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   // Retry queued pushes on demand — drives "Retry push" on the failure screen.
   if (message.type === 'PROCESS_QUEUE') {
     processOfflineQueue()
@@ -1067,6 +1074,53 @@ async function deleteSingleSolution(problemNumber, folderName, fileName) {
 
   console.log(`[LeetSync] ✅ Solution ${fileName} deleted and renumbered`);
   return { success: true, remaining };
+}
+
+/**
+ * Save a note against a problem and mirror it into that problem's README.
+ *
+ * Local storage is written first and reported as success on its own: the note
+ * is the user's, and it should survive even if GitHub is unreachable. The
+ * README catches up on the next push if this patch fails.
+ */
+async function setProblemNote(problemNumber, note) {
+  const text = String(note ?? '').trim().slice(0, 4000);
+  const local = await chrome.storage.local.get(['solvedProblems']);
+  const solvedProblems = local.solvedProblems || {};
+  const problem = solvedProblems[problemNumber];
+  if (!problem) return { success: false, error: 'Unknown problem' };
+
+  problem.note = text;
+  solvedProblems[problemNumber] = problem;
+  await chrome.storage.local.set({ solvedProblems });
+
+  const { githubRepo: repo } = await chrome.storage.sync.get(['githubRepo']);
+  if (!repo) return { success: true, pushed: false };
+
+  const folderPath = `problems/${problem.folderName
+    || buildFolderName(problem.number, problem.title)}`;
+  const path = `${folderPath}/README.md`;
+  try {
+    const file = await getFile(repo, path);
+    if (!file) return { success: true, pushed: false };
+
+    const content = base64ToUnicode(file.content);
+    const section = buildNotesSection(text).trimEnd();
+    // Same trailing-newline care as the solutions index: without it the block
+    // butts against the "---" rule and Markdown reads that as a heading.
+    const updated = content.replace(/### NOTES[\s\S]*?(?=\n---)/, `${section}\n`);
+    if (updated === content) return { success: true, pushed: false };
+
+    await putFile(
+      repo, path, updated,
+      `Update notes: ${problem.number}. ${problem.title}`,
+      file.sha
+    );
+    return { success: true, pushed: true };
+  } catch (error) {
+    console.warn('[LeetSync] Could not push note:', error.message);
+    return { success: true, pushed: false, error: error.message };
+  }
 }
 
 /**

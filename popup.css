@@ -1393,3 +1393,38 @@ body.theme-light .error-foot { border-top-color: var(--bd); }
 
 /* Topic names are longer than the Battle tab's "You"/username labels. */
 .compare-label.topic-label { width: 96px; }
+
+/* ── Per-problem notes ── */
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--bd-soft);
+}
+.note-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--f-label);
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tx-4);
+}
+.note-status { font-size: 9px; letter-spacing: .06em; color: var(--ac); }
+.note-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-ctrl);
+  border-radius: var(--r-sm);
+  resize: vertical;
+}
+.note-input:focus { border-color: var(--ac); }
+.note-input::placeholder { color: var(--tx-5); }
