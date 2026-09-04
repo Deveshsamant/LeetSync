@@ -253,6 +253,10 @@ body.theme-light .btn-ghost { border-width: 2px; }
   gap: 6px;
 }
 .form-group label svg { width: 12px; height: 12px; opacity: .7; }
+/* Modernist zeroes --pad-tab, which leaves the label's icon touching the very
+   edge of the popup. The control below it is meant to be full-bleed; its
+   caption is not. */
+body.theme-light .tab-content > .form-group > label { padding-left: 12px; }
 
 .form-group input[type="text"],
 .form-group input[type="password"],

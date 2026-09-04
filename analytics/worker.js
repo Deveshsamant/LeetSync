@@ -277,11 +277,27 @@ async function problemDetail(env, slug, days) {
               FROM events WHERE ts >= ? AND slug = ? AND event='submission'
               GROUP BY day ORDER BY day`, since, slug),
   ]);
+  const names = await nameMap(env);
   return {
     slug, days, generatedAt: Date.now(),
-    totals: totals[0] || {}, statuses, languages, installs, daily,
+    totals: totals[0] || {}, statuses, languages, daily,
+    installs: installs.map(r => ({ ...r, display_name: named(names, r) })),
   };
 }
+
+/**
+ * The `names` table is the authority on who an install is; per-event
+ * display_name is only a copy carried by whatever events happened after the
+ * claim. Reading the table means a name claimed today labels the install's
+ * whole history instead of leaving every earlier row anonymous — and an
+ * install that has claimed a name but not reported since is still named.
+ */
+async function nameMap(env) {
+  const rows = await all(env, 'SELECT install_id, name FROM names');
+  return new Map(rows.map(r => [r.install_id, r.name]));
+}
+
+const named = (names, row) => names.get(row.install_id) || row.display_name || null;
 
 /** One row per install, for the user list. */
 async function users(env, days) {
@@ -303,10 +319,15 @@ async function users(env, days) {
               WHERE ts >= ? AND theme IS NOT NULL GROUP BY install_id`, since),
   ]);
   const themeOf = new Map(themeRows.map(r => [r.install_id, r.theme]));
+  const names = await nameMap(env);
   return {
     days,
     generatedAt: Date.now(),
-    users: rows.map(r => ({ ...r, theme: themeOf.get(r.install_id) || null })),
+    users: rows.map(r => ({
+      ...r,
+      display_name: named(names, r),
+      theme: themeOf.get(r.install_id) || null,
+    })),
   };
 }
 
@@ -329,10 +350,12 @@ async function userDetail(env, installId, limit) {
               WHERE install_id = ? AND language IS NOT NULL
               GROUP BY language ORDER BY n DESC LIMIT 8`, installId),
   ]);
+  const names = await nameMap(env);
+  const row = profile[0] || {};
   return {
     installId,
     generatedAt: Date.now(),
-    profile: profile[0] || {},
+    profile: { ...row, display_name: names.get(installId) || row.display_name || null },
     timeline,
     languages: langs,
   };
@@ -347,7 +370,12 @@ async function activity(env, days, limit) {
             tests_passed, tests_total, code_len,
             CASE WHEN code IS NULL THEN 0 ELSE 1 END AS has_code
      FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT ?`, since, limit);
-  return { days, generatedAt: Date.now(), rows };
+  const names = await nameMap(env);
+  return {
+    days,
+    generatedAt: Date.now(),
+    rows: rows.map(r => ({ ...r, display_name: named(names, r) })),
+  };
 }
 
 /**
@@ -397,11 +425,13 @@ async function dayDetail(env, date) {
                 GROUP BY difficulty ORDER BY n DESC`, date),
     ]);
 
+  const names = await nameMap(env);
   return {
     date,
     generatedAt: Date.now(),
     totals: totals[0] || { events: 0, installs: 0 },
-    hourly, statuses, problems, languages, installs, difficulty,
+    hourly, statuses, problems, languages, difficulty,
+    installs: installs.map(r => ({ ...r, display_name: named(names, r) })),
   };
 }
 
