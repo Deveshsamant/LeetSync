@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  chrome.storage.local.get(['remoteConfig', 'showWhatsNew', 'dismissedAnnouncement'], async (data) => {
+  chrome.storage.local.get(['remoteConfig', 'showWhatsNew', 'dismissedAnnouncement', 'dismissedUpdate'], async (data) => {
     const bundled = await loadBundledConfig();
     const config = data.remoteConfig || bundled;
     if (!config) return;
@@ -153,10 +153,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((latest[i] || 0) > (current[i] || 0)) { isNewer = true; break; }
         if ((latest[i] || 0) < (current[i] || 0)) break;
       }
-      if (isNewer) {
+      // Keyed by version, not a plain flag: dismissing 2.0 must not silence 2.1.
+      if (isNewer && data.dismissedUpdate !== config.latestVersion) {
         const banner = document.getElementById('updateBanner');
         document.getElementById('updateText').textContent = `v${config.latestVersion} available! Update from Chrome Web Store.`;
         banner.style.display = 'flex';
+
+        document.getElementById('updateDismiss').addEventListener('click', () => {
+          banner.style.display = 'none';
+          chrome.storage.local.set({ dismissedUpdate: config.latestVersion });
+        });
       }
     }
 

@@ -122,3 +122,25 @@ test('no stray control characters in shipped source', () => {
       `${name} holds control byte 0x${(bad[0] || [0])[0].toString(16)} at offset ${(bad[0] || [])[1]}`);
   }
 });
+
+/**
+ * The update banner must be dismissible, and the dismissal must be remembered
+ * against the version it dismissed. A plain boolean would silence every future
+ * release — the failure is invisible, because the banner simply never appears
+ * again and nothing errors.
+ */
+test('popup: update banner dismissal is keyed by version, not a flag', () => {
+  const { html, js } = PAGES[0];
+
+  assert.match(html, /id="updateDismiss"/,
+    'the update banner has no dismiss control');
+
+  assert.match(js, /dismissedUpdate !== config\.latestVersion/,
+    'the banner is not gated on a previously dismissed version');
+
+  assert.match(js, /dismissedUpdate: config\.latestVersion/,
+    'the dismissal stores something other than the version it dismissed');
+
+  assert.ok(js.includes("'dismissedUpdate'"),
+    'dismissedUpdate is written but never read back from storage');
+});
