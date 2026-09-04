@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="logo.png" alt="LeetSync Logo" width="120" />
+<img src="icons/icon128.png" alt="LeetSync Logo" width="120" />
 
 # ⚡ LeetSync
 
 ### *Automatically push your LeetCode accepted solutions to GitHub — hands-free.*
 
-[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white&labelColor=1a1a2e)](https://github.com)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white&labelColor=1a1a2e)](https://leetsync-site.vercel.app/)
+[![Website](https://img.shields.io/badge/Website-leetsync--site.vercel.app-3FE08B?style=for-the-badge&labelColor=1a1a2e)](https://leetsync-site.vercel.app/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00b8a3?style=for-the-badge&labelColor=1a1a2e)](https://developer.chrome.com/docs/extensions/mv3/)
 [![GitHub API](https://img.shields.io/badge/GitHub-API%20v3-6c5ce7?style=for-the-badge&logo=github&labelColor=1a1a2e)](https://docs.github.com/en/rest)
 [![Made By](https://img.shields.io/badge/Made%20by-Devesh%20Samant-ffa116?style=for-the-badge&labelColor=1a1a2e)](https://deveshsamant.in/)
