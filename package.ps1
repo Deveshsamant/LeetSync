@@ -11,7 +11,11 @@ Set-Location -Path $PSScriptRoot
 
 $manifest = Get-Content 'manifest.json' -Raw | ConvertFrom-Json
 $version = $manifest.version
-$out = "leetsync-$version.zip"
+# Built into store/dist so the upload artefact sits beside the listing copy
+# and the promo art, rather than loose in the repo root.
+$outDir = Join-Path $PSScriptRoot 'store/dist'
+if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+$out = Join-Path $outDir "leetsync-$version.zip"
 
 $files = @(
   'manifest.json',

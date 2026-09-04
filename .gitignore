@@ -20,3 +20,4 @@ node_modules/
 # Generated dev preview (scripts/make-preview.mjs)
 preview-popup.html
 preview-tracker.html
+store/dist/
