@@ -17,23 +17,53 @@ const stub = `
 <script>
 // ── Dev-only chrome stub. Sample data mirrors the real message shapes. ──
 (function () {
+  // Ordered so the rows visible without scrolling carry all three
+  // difficulties and more than one language — a screen of nothing but Easy
+  // says less about the UI than a mixed one.
   const solved = [
+    { number: 42, title: 'Trapping Rain Water', difficulty: 'Hard', language: 'C++', date: '2026-09-03' },
+    { number: 55, title: 'Jump Game', difficulty: 'Medium', language: 'Java', date: '2026-09-02' },
     { number: 88, title: 'Merge Sorted Array', difficulty: 'Easy', language: 'Java', date: '2026-09-02' },
-    { number: 27, title: 'Remove Element', difficulty: 'Easy', language: 'Java', date: '2026-09-02' },
-    { number: 26, title: 'Remove Duplicates from Sorted Array', difficulty: 'Easy', language: 'Python', date: '2026-09-01' },
-    { number: 1,  title: 'Two Sum', difficulty: 'Easy', language: 'Java', date: '2026-09-01' },
+    { number: 4,  title: 'Median of Two Sorted Arrays', difficulty: 'Hard', language: 'Python', date: '2026-09-01' },
+    { number: 146, title: 'LRU Cache', difficulty: 'Medium', language: 'C++', date: '2026-09-01' },
+    { number: 1,  title: 'Two Sum', difficulty: 'Easy', language: 'Python', date: '2026-08-31' },
     { number: 121, title: 'Best Time to Buy and Sell Stock', difficulty: 'Easy', language: 'Python', date: '2026-08-31' },
-    { number: 169, title: 'Majority Element', difficulty: 'Easy', language: 'C++', date: '2026-08-30' },
-    { number: 42, title: 'Trapping Rain Water', difficulty: 'Hard', language: 'C++', date: '2026-08-29' },
-    { number: 55, title: 'Jump Game', difficulty: 'Medium', language: 'Java', date: '2026-08-28' }
+    { number: 169, title: 'Majority Element', difficulty: 'Easy', language: 'C++', date: '2026-08-30' }
   ];
-  const localStore = {};
+  // Enough local state for Battle to have both sides of a comparison; without
+  // it the tab renders its empty state, which is not what the screen is for.
+  //
+  // Dates are relative to today so the weekly challenge always has something
+  // in it — a fixed date would leave the panel empty the week after capture.
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const localStore = {
+    solvedProblems: Object.fromEntries(
+      solved.map((p, i) => [String(p.number), { number: p.number, date: daysAgo(i) }])),
+    pushCount: 11,
+  };
   // ?theme= and ?tab= let a capture script drive the preview without having
   // to reach into the page. Defaults match a normal dev open.
   const params = new URLSearchParams(location.search);
   const wantTheme = params.get('theme') === 'light' ? 'light' : 'dark';
   const wantTab = params.get('tab');
-  const store = { githubToken: 'ghp_preview', githubRepo: 'Deveshsamant/leetcode-solutions', uiTheme: wantTheme };
+  const capture = params.get('capture') === '1';
+
+  if (capture) {
+    const kill = document.createElement('style');
+    kill.textContent =
+      '*,*::before,*::after{animation:none!important;transition:none!important;' +
+      'animation-duration:0s!important;transition-duration:0s!important}';
+    document.addEventListener('DOMContentLoaded', () => document.head.appendChild(kill));
+  }
+  const store = {
+    githubToken: 'ghp_preview',
+    githubRepo: 'Deveshsamant/leetcode-solutions',
+    uiTheme: wantTheme,
+    friends: [
+      { username: 'ananya-r', repo: 'ananya-r/dsa-solutions', solvedCount: 11, weeklyCount: 4 },
+      { username: 'kabir_dev', repo: 'kabir_dev/leetcode', solvedCount: 6, weeklyCount: 2 },
+    ],
+  };
   const reply = {
     GET_PROBLEMS:     { success: true, problems: solved },
     GET_STATS:        { pushCount: 11, solvedCount: solved.length, lastPush: new Date(Date.now() - 43e6).toISOString() },
@@ -95,7 +125,8 @@ const stub = `
     window.addEventListener('load', () => setTimeout(() => {
       const tab = document.querySelector(\`[data-tab="\${wantTab}"]\`);
       if (tab) tab.click();
-      setTimeout(() => { document.documentElement.dataset.previewReady = '1'; }, 450);
+      setTimeout(() => { document.documentElement.dataset.previewReady = '1'; },
+        capture ? 900 : 450);
     }, 350));
   } else {
     window.addEventListener('load', () => setTimeout(() => {
