@@ -1,5 +1,5 @@
 {
-  "latestVersion": "1.6.0",
+  "latestVersion": "2.0.0",
   "maintenance": {
     "active": false,
     "message": "We're upgrading LeetSync! Be right back.",
@@ -11,55 +11,67 @@
     "type": "info"
   },
   "changelog": {
+    "2.0.0": [
+      "Every submission is now recorded, not just the accepted ones \u2014 filter Solved by what took you several tries, or what you have not revisited",
+      "Write notes on any problem; they go into that problem's page in your repo",
+      "Pick a username when you connect GitHub, unique across LeetSync",
+      "README index collapses into per-difficulty sections once it outgrows a flat table, so a large repo stays readable",
+      "README gains a rolling-year solve calendar, and difficulty badges now show progress against LeetCode's real totals",
+      "Usage reporting is asked once during setup instead of hiding in Settings, and still starts off",
+      "Sharing your solution code is a separate switch that stays off even when reporting is on",
+      "Fixed: the weekly challenge bar showed a number next to an empty bar",
+      "Fixed: runtime and memory were always blank on synced solutions",
+      "Fixed: release notes could silently fail to appear after an update"
+    ],
     "1.6.0": [
       "Sheet ticks now sync across devices and survive a reinstall",
-      "New All sheets view — 895 unique problems across the seven sheets",
+      "New All sheets view \u2014 895 unique problems across the seven sheets",
       "Export and import your progress; your token is never included",
       "Full keyboard navigation with arrow keys through the tabs",
       "Sheets can update without waiting on a store release",
       "Fixed: the footer dashboard button and the wizard step counter did nothing"
     ],
     "1.5.0": [
-      "Seven real study sheets — Striver A2Z, SDE, Blind 75 and 79, Love Babbar 450, NeetCode 150 and 250",
+      "Seven real study sheets \u2014 Striver A2Z, SDE, Blind 75 and 79, Love Babbar 450, NeetCode 150 and 250",
       "1,667 problems, 1,152 of which tick themselves as you solve",
       "Tick anything off-LeetCode by hand; progress is kept per sheet",
       "Show more opens a full tracker in its own tab, with search and filters",
-      "Achievements redrawn as custom icons — no more platform emoji",
+      "Achievements redrawn as custom icons \u2014 no more platform emoji",
       "Repository row opens your repo on GitHub",
-      "Set up from just your token — LeetSync finds the repo or creates it",
+      "Set up from just your token \u2014 LeetSync finds the repo or creates it",
       "Showcase cards removed",
       "Deleting a solution now updates the README on GitHub too"
     ],
     "1.4.0": [
-      "New Sheets tab — Top Interview 150, Top 100 Liked, LeetCode 75, DP and Binary Search",
+      "New Sheets tab \u2014 Top Interview 150, Top 100 Liked, LeetCode 75, DP and Binary Search",
       "Questions tick automatically as you solve them, with per-topic progress",
       "Tap any question to open it on LeetCode in a new tab",
       "403 curated questions, built from LeetCode's own API"
     ],
     "1.3.0": [
-      "Rebuilt popup with two themes — Signal (dark) and Modernist (light)",
+      "Rebuilt popup with two themes \u2014 Signal (dark) and Modernist (light)",
       "New README design: badges plus stat panels that follow your GitHub theme",
       "Fixed a broken badge that read \"404 badge not found\" on every problem",
       "GitHub rate limits are now waited out instead of failing the push",
-      "Fine-grained tokens supported — scope access to a single repository",
+      "Fine-grained tokens supported \u2014 scope access to a single repository",
       "Fonts bundled locally, so the popup makes no network request to open",
       "Download is 98% smaller: 191 KB instead of ~10 MB"
     ],
     "1.1.0": [
-      "📸 Solution Showcase Cards — share your solves as beautiful PNG images",
-      "⚔️ Friend Battle System — add rivals, compare stats, weekly challenges",
-      "🗑️ Individual solution deletion with auto-renumbering",
-      "🔧 Remote config: maintenance mode & update notifications",
-      "🏆 Achievement badge grid alignment fix"
+      "\ud83d\udcf8 Solution Showcase Cards \u2014 share your solves as beautiful PNG images",
+      "\u2694\ufe0f Friend Battle System \u2014 add rivals, compare stats, weekly challenges",
+      "\ud83d\uddd1\ufe0f Individual solution deletion with auto-renumbering",
+      "\ud83d\udd27 Remote config: maintenance mode & update notifications",
+      "\ud83c\udfc6 Achievement badge grid alignment fix"
     ],
     "1.0.0": [
-      "🚀 Auto-push accepted LeetCode solutions to GitHub",
-      "🎨 6 extension themes (Dark Pro, Glass, Arcade, Cyberpunk, Ocean, Sakura)",
-      "📊 Analytics dashboard with heatmap & stats",
-      "🏆 15 achievement badges",
-      "🔥 Daily streak counter",
-      "📡 Offline queue for failed pushes",
-      "📝 5 README themes for your GitHub repo"
+      "\ud83d\ude80 Auto-push accepted LeetCode solutions to GitHub",
+      "\ud83c\udfa8 6 extension themes (Dark Pro, Glass, Arcade, Cyberpunk, Ocean, Sakura)",
+      "\ud83d\udcca Analytics dashboard with heatmap & stats",
+      "\ud83c\udfc6 15 achievement badges",
+      "\ud83d\udd25 Daily streak counter",
+      "\ud83d\udce1 Offline queue for failed pushes",
+      "\ud83d\udcdd 5 README themes for your GitHub repo"
     ]
   }
 }

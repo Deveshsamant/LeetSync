@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LeetSync - Auto Push LeetCode to GitHub",
   "description": "Auto-push accepted LeetCode solutions to GitHub with study sheets, achievements and battle mode",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

@@ -1,6 +1,6 @@
 {
   "name": "leetsync",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Dev tooling for the LeetSync Chrome extension. Not shipped \u2014 package.ps1 has an explicit include list.",
   "scripts": {
