@@ -75,11 +75,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // 🔧 REMOTE CONFIG — Maintenance, Updates, Announcements
   // ═══════════════════════════════════════════════════════════
-  chrome.storage.local.get(['remoteConfig', 'showWhatsNew', 'dismissedAnnouncement'], (data) => {
-    const config = data.remoteConfig;
+  /**
+   * The copy of remote-config.json packaged with this build.
+   *
+   * It always describes the version it shipped with, so release notes never
+   * depend on a network call that may never have succeeded.
+   */
+  async function loadBundledConfig() {
+    try {
+      const res = await fetch(chrome.runtime.getURL('remote-config.json'));
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;                       // packaged file unreadable; give up quietly
+    }
+  }
+
+  chrome.storage.local.get(['remoteConfig', 'showWhatsNew', 'dismissedAnnouncement'], async (data) => {
+    const bundled = await loadBundledConfig();
+    const config = data.remoteConfig || bundled;
     if (!config) return;
 
     const currentVersion = chrome.runtime.getManifest().version;
+
+    // A cached remote config predates this build, so it cannot carry notes for
+    // a version released after it was fetched. The packaged copy always can.
+    if (bundled && bundled.changelog
+        && !(config.changelog && config.changelog[currentVersion])) {
+      config.changelog = Object.assign({}, config.changelog, bundled.changelog);
+    }
 
     // ── Maintenance Banner ──
     if (config.maintenance && config.maintenance.active) {
@@ -193,6 +216,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const counter = document.querySelector('.wizard-step-count');
     if (counter) counter.textContent = `STEP ${step} / ${dots.length}`;
   }
+
+  // ── Onboarding consent (step 4) ──
+  //
+  // Asked here rather than left buried in Settings, so the choice is made
+  // knowingly. It starts off and nothing here blocks finishing setup: both
+  // buttons lead to the same place, and "Not now" is a real answer rather
+  // than a nag that reappears.
+  const wizAnalyticsToggle = document.getElementById('wizAnalyticsToggle');
+
+  wizAnalyticsToggle.addEventListener('click', () => {
+    const on = !wizAnalyticsToggle.classList.contains('on');
+    wizAnalyticsToggle.classList.toggle('on', on);
+    wizAnalyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  async function finishConsent(optIn) {
+    // setEnabled writes the consent and, when on, creates the install id, so
+    // the id exists before the first event rather than on the first send.
+    await Analytics.setEnabled(optIn === true);
+    if (optIn) Analytics.track('session', { detail: 'onboarding_opt_in' });
+    wizGoTo(5);
+  }
+
+  document.getElementById('wizNext4').addEventListener('click', () =>
+    finishConsent(wizAnalyticsToggle.classList.contains('on')));
+  document.getElementById('wizSkipAnalytics').addEventListener('click', () =>
+    finishConsent(false));
 
   document.getElementById('wizStart').addEventListener('click', () => wizGoTo(2));
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));

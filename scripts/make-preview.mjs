@@ -13,6 +13,11 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
+// Read from the manifest rather than hardcoded, so the preview cannot drift
+// from the real version — a stale one made the update banner appear against
+// the extension's own release and mislabelled the What's New notes.
+const VERSION = JSON.parse(readFileSync('manifest.json', 'utf8')).version;
+
 const stub = `
 <script>
 // ── Dev-only chrome stub. Sample data mirrors the real message shapes. ──
@@ -41,6 +46,13 @@ const stub = `
       solved.map((p, i) => [String(p.number), { number: p.number, date: daysAgo(i) }])),
     pushCount: 11,
   };
+  // ?whatsnew=1 stands in for a just-updated install. Deliberately leaves
+  // remoteConfig unset, which is the case that used to swallow the release
+  // notes: no cached fetch means the popup must fall back to the packaged
+  // remote-config.json.
+  if (new URLSearchParams(location.search).get('whatsnew') === '1') {
+    localStore.showWhatsNew = true;
+  }
   // ?theme= and ?tab= let a capture script drive the preview without having
   // to reach into the page. Defaults match a normal dev open.
   const params = new URLSearchParams(location.search);
@@ -82,7 +94,7 @@ const stub = `
     runtime: {
       lastError: null,
       getURL: (p) => p,
-      getManifest: () => ({ version: '1.5.0' }),
+      getManifest: () => ({ version: '${VERSION}' }),
       sendMessage: (msg, cb) => setTimeout(() => cb && cb(reply[msg.type] ?? { success: true }), 10),
       onMessage: { addListener() {} }
     },

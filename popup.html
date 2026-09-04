@@ -108,8 +108,45 @@
         </div>
       </div>
 
-      <!-- Step 4: Success -->
+      <!-- Step 4: Usage reporting -->
       <div class="wizard-step" id="wizStep4">
+        <div class="wizard-body">
+          <div class="sec-label">OPTIONAL</div>
+          <h2>Help improve LeetSync?</h2>
+          <p class="wizard-desc">Setup is done — this changes nothing about how
+            it works. Share anonymous usage data so the next version is built on
+            what people actually use, not guesses.</p>
+
+          <div class="set-row" style="border-top:0;padding:10px 0;margin-top:6px;">
+            <span>Share usage data</span>
+            <button class="toggle-track" id="wizAnalyticsToggle" type="button"
+                    role="switch" aria-checked="false" aria-label="Share usage data">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="form-hint">
+            If you turn it on: your username, the extension version, your theme,
+            which features you use, and every submission result — problem,
+            difficulty, language, verdict, runtime and memory.
+            <br><br>
+            Never: your GitHub token, your repository, or your solution code.
+            Sharing code is a separate switch in Settings and stays off.
+            You can change this any time.
+            <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
+               target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
+          </div>
+        </div>
+        <div class="wizard-actions">
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" id="wizSkipAnalytics">Not now</button>
+            <button class="btn btn-primary" id="wizNext4">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Success -->
+      <div class="wizard-step" id="wizStep5">
         <div class="wizard-body">
           <div class="wizard-success">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true">
@@ -134,8 +171,9 @@
             <span class="wizard-dot" data-step="2"></span>
             <span class="wizard-dot" data-step="3"></span>
             <span class="wizard-dot" data-step="4"></span>
+            <span class="wizard-dot" data-step="5"></span>
           </div>
-          <span class="wizard-step-count">STEP 1 / 4</span>
+          <span class="wizard-step-count">STEP 1 / 5</span>
         </div>
       </div>
 
