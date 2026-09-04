@@ -39,9 +39,28 @@ version that already exists.
 
 ## Assets
 
-Drop images into `assets/` and upload them by hand; there is no API for store
-assets. Sizes and formats are in `assets/README.md`.
+There is no API for store assets, so they are built here and uploaded by hand.
 
-The marketing site's captures are a good starting point for screenshots, but
-they are 840x1200 popup shots — the store wants 1280x800 landscape, so they
-need composing onto a background rather than uploading directly.
+```bash
+python store/make-assets.py
+```
+
+That writes all seven — five 1280x800 screenshots, the 440x280 small tile and
+the 1400x560 marquee — from the marketing site's captures, which are the real
+popup and tracker rather than mockups. Retake those first if the UI has
+changed:
+
+```bash
+cd ../leetsync-site && bash scripts/capture-screens.sh
+```
+
+Two details the store is strict about, both handled by the script: the canvas
+sizes are exact, and the PNGs must be 24-bit with **no alpha**. Chrome always
+captures RGBA, so each image is composed in the browser at 2x, then
+downsampled and flattened to RGB with Pillow — which also gives supersampled
+text rather than the browser's antialiasing at final size. The script prints
+the mode and dimensions of everything it writes and exits non-zero if any of
+them come out wrong.
+
+The compositions use the Modernist palette copied from the site's `THEMES`
+table, so the tiles and the landing page cannot drift apart.
