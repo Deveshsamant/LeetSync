@@ -1657,6 +1657,59 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // SAY SOMETHING
+  //
+  // Three kinds rather than one box, because an issue and a suggestion get
+  // read in different moods and sorting them afterwards is worse than asking.
+  // ═══════════════════════════════════════════════════════════
+  let fbKind = 'feedback';
+
+  document.getElementById('fbKinds').addEventListener('click', (event) => {
+    const chip = event.target.closest('.filter-chip');
+    if (!chip) return;
+    fbKind = chip.dataset.kind;
+    for (const other of document.querySelectorAll('#fbKinds .filter-chip')) {
+      other.classList.toggle('active', other === chip);
+    }
+  });
+
+  const fbSend = document.getElementById('fbSend');
+  fbSend.addEventListener('click', async () => {
+    const box = document.getElementById('fbMessage');
+    const result = document.getElementById('fbResult');
+    const message = box.value.trim();
+
+    const show = (text, type) => {
+      result.textContent = text;
+      result.className = 'status-message status-' + type;
+      result.style.display = 'block';
+    };
+
+    if (message.length < 3) {
+      show('Write a little more first.', 'error');
+      return;
+    }
+
+    fbSend.disabled = true;
+    fbSend.textContent = 'Sending…';
+    const res = await Analytics.sendFeedback(fbKind, message);
+    fbSend.disabled = false;
+    fbSend.textContent = 'Send';
+
+    if (res.ok) {
+      box.value = '';
+      show('Sent — thank you. It goes straight to the developer.', 'success');
+      return;
+    }
+    show(
+      res.reason === 'too_soon'
+        ? `Just a moment — one message a minute. Try again in ${Math.ceil((res.retryAfterMs || 60000) / 1000)}s.`
+        : res.reason === 'offline' ? 'Could not reach the server. Check your connection.'
+          : 'Could not send that. Try again.',
+      'error');
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // DEVICES
   //
   // The merge itself lives in the service worker; this only asks for it and

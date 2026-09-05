@@ -624,6 +624,29 @@
           <div id="dataMessage" class="status-message status-info" style="display:none;margin-top:10px;"></div>
         </div>
 
+        <!-- Say something -->
+        <div class="card">
+          <div class="sec-label" style="margin-bottom:10px;">SAY SOMETHING</div>
+          <div class="filter-row" id="fbKinds" style="margin-bottom:10px;">
+            <button class="filter-chip active" data-kind="feedback">FEEDBACK</button>
+            <button class="filter-chip" data-kind="issue">ISSUE</button>
+            <button class="filter-chip" data-kind="suggestion">SUGGESTION</button>
+          </div>
+          <div class="form-group">
+            <textarea id="fbMessage" rows="3" maxlength="2000"
+                      placeholder="What happened, or what would you rather it did?"
+                      spellcheck="true"></textarea>
+          </div>
+          <div class="form-hint" style="margin:8px 0 10px;">
+            Sent straight to the developer with your username, your install ID
+            and the extension version — a bug report without a version is not
+            much use. Nothing else goes with it, and this is separate from
+            usage reporting: it works whether that is on or off.
+          </div>
+          <button class="btn btn-primary" id="fbSend">Send</button>
+          <div id="fbResult" class="status-message status-info" style="display:none;margin-top:10px;"></div>
+        </div>
+
         <!-- Devices -->
         <div class="card">
           <div class="sec-label" style="margin-bottom:10px;">DEVICES</div>

@@ -439,6 +439,81 @@ async function dayDetail(env, date) {
 }
 
 /**
+ * Feedback from the extension's Settings panel.
+ *
+ * The write is public, like ingest and claim-name, because it comes from the
+ * extension rather than the dashboard. That makes it the one place a stranger
+ * can put text into the database, so it is the one place that needs a rate
+ * limit as well as validation: one send per install per minute, checked
+ * against the last row rather than kept in memory, because a Worker isolate
+ * does not outlive the request.
+ *
+ * A row carries who sent it. Every other table here is deliberately anonymous,
+ * but a bug report without a version is not actionable and a suggestion you
+ * cannot reply to is a dead end — and unlike telemetry, this row exists
+ * because someone typed it and pressed send. The extension says so above the
+ * button rather than leaving it to be discovered here.
+ */
+const FEEDBACK_KINDS = new Set(['feedback', 'issue', 'suggestion']);
+const MAX_FEEDBACK = 2000;
+const FEEDBACK_GAP = 60000;   // one send per install per minute
+
+async function sendFeedback(env, body) {
+  const kind = str(body && body.kind, 20);
+  if (!FEEDBACK_KINDS.has(kind)) return json({ error: 'unknown kind' }, 400);
+
+  const message = str(body && body.message, MAX_FEEDBACK);
+  if (!message || message.trim().length < 3) {
+    return json({ error: 'message is required' }, 400);
+  }
+
+  const installId = str(body && body.installId, 64);
+  const now = Date.now();
+
+  if (installId) {
+    const recent = await all(env,
+      'SELECT created_at FROM feedback WHERE install_id = ? ORDER BY created_at DESC LIMIT 1',
+      installId);
+    if (recent[0] && now - recent[0].created_at < FEEDBACK_GAP) {
+      return json({ error: 'too soon', retryAfterMs: FEEDBACK_GAP - (now - recent[0].created_at) }, 429);
+    }
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO feedback (kind, message, install_id, display_name, version, created_at, handled)
+     VALUES (?, ?, ?, ?, ?, ?, 0)`
+  ).bind(
+    kind, message.trim(), installId,
+    str(body && body.name, MAX_NAME), str(body && body.version, 20), now,
+  ).run();
+
+  return json({ ok: true });
+}
+
+async function feedbackList(env, limit, openOnly) {
+  const rows = openOnly
+    ? await all(env, `SELECT id, kind, message, install_id, display_name, version, created_at, handled
+                      FROM feedback WHERE handled = 0
+                      ORDER BY created_at DESC LIMIT ?`, limit)
+    : await all(env, `SELECT id, kind, message, install_id, display_name, version, created_at, handled
+                      FROM feedback ORDER BY created_at DESC LIMIT ?`, limit);
+
+  const counts = await all(env,
+    `SELECT kind, COUNT(*) AS n, SUM(CASE WHEN handled = 0 THEN 1 ELSE 0 END) AS open
+     FROM feedback GROUP BY kind`);
+
+  return { rows, counts, generatedAt: Date.now() };
+}
+
+async function markFeedback(env, id, handled) {
+  const row = Number(id);
+  if (!Number.isFinite(row)) return json({ error: 'bad id' }, 400);
+  await env.DB.prepare('UPDATE feedback SET handled = ? WHERE id = ?')
+    .bind(handled ? 1 : 0, Math.floor(row)).run();
+  return json({ ok: true });
+}
+
+/**
  * Broadcasts — the developer speaking to every user at once.
  *
  * The read is public because every extension polls it, and it deliberately
@@ -745,6 +820,23 @@ export default {
     const int = (name, dflt, lo, hi) =>
       Math.min(Math.max(Number(url.searchParams.get(name)) || dflt, lo), hi);
 
+    // Marking feedback handled is a dashboard write, so it goes ahead of the
+    // /api/ read block, which answers everything else under that prefix.
+    if (url.pathname === '/api/feedback' && request.method === 'POST') {
+      if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400);
+      }
+      try {
+        return await markFeedback(env, payload && payload.id, payload && payload.handled);
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
     // Sending is the one write the dashboard makes, so it carries the key.
     // It has to be matched before the /api/ read block below, which answers
     // every other /api/ path and 404s the ones it does not recognise.
@@ -815,6 +907,11 @@ export default {
           return json(rows[0]);
         }
 
+        if (url.pathname === '/api/feedback') {
+          return json(await feedbackList(env, int('limit', 100, 1, 500),
+            url.searchParams.get('open') === '1'));
+        }
+
         if (url.pathname === '/api/announcements') {
           return json(await announcementHistory(env, int('limit', 20, 1, 100)));
         }
@@ -850,6 +947,21 @@ export default {
 
     // Claiming a name is a client operation, so it sits outside the read API
     // and its key. It is still write-only from the caller's point of view.
+    // Public, because it comes from the extension. Rate limited inside.
+    if (url.pathname === '/feedback') {
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400);
+      }
+      try {
+        return await sendFeedback(env, payload);
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
     if (url.pathname === '/claim-name') {
       let claim;
       try {

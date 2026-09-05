@@ -106,6 +106,40 @@ const Analytics = (() => {
   }
 
   /**
+   * Send feedback, an issue or a suggestion.
+   *
+   * Not gated on the usage-reporting consent, because this is not telemetry:
+   * the user typed it and pressed send. It does carry the install id, the
+   * version and the chosen username, since a bug report without a version is
+   * not actionable and a suggestion nobody can reply to is a dead end — and
+   * the panel says so above the button rather than leaving it to be found out.
+   */
+  async function sendFeedback(kind, message) {
+    if (!configured()) return { ok: false, reason: 'unconfigured' };
+    try {
+      const res = await fetch(`${ENDPOINT}/feedback`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          message: String(message || '').slice(0, 2000),
+          installId: await installId(),
+          name: await displayName(),
+          version: version(),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        return { ok: false, reason: 'too_soon', retryAfterMs: body.retryAfterMs || 60000 };
+      }
+      if (!res.ok) return { ok: false, reason: body.error || 'server' };
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: 'offline' };
+    }
+  }
+
+  /**
    * The current broadcast, or null.
    *
    * A plain read that sends nothing — no install id, no consent needed, and
@@ -376,7 +410,7 @@ const Analytics = (() => {
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
-    leaderboard, announcement,
+    leaderboard, announcement, sendFeedback,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY, PING_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };
