@@ -543,6 +543,7 @@ async function updateRootReadme(repo, newProblem) {
 function report(event, fields = {}) {
   Analytics.track(event, fields)
     .then(() => Analytics.flush())
+    .then(() => Analytics.heartbeat())
     .catch(() => {});
 }
 
@@ -1681,6 +1682,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === 'flushAnalytics') {
     Analytics.flush().catch(() => {});
+    // Rides the same alarm rather than adding one. heartbeat() is a no-op
+    // when reporting is on, when the ping is switched off, and when one was
+    // already sent in the last half day, so calling it often costs nothing.
+    Analytics.heartbeat().catch(() => {});
   }
 });
 

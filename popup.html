@@ -125,14 +125,26 @@
             </button>
           </div>
 
+          <div class="set-row" style="padding:10px 0;">
+            <span>Count me as an active user</span>
+            <button class="toggle-track on" id="wizPingToggle" type="button"
+                    role="switch" aria-checked="true" aria-label="Count me as an active user">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
           <div class="form-hint">
-            If you turn it on: your username, the extension version, your theme,
-            which features you use, and every submission result — problem,
-            difficulty, language, verdict, runtime and memory.
+            If you turn the first one on: your username, the extension version,
+            your theme, which features you use, and every submission result —
+            problem, difficulty, language, verdict, runtime and memory.
             <br><br>
-            Never: your GitHub token, your repository, or your solution code.
-            Sharing code is a separate switch in Settings and stays off.
-            You can change this any time.
+            The second is on by default and is all that is sent if you leave
+            the first off: a random ID and the version, at most twice a day.
+            Switch it off and nothing leaves your browser.
+            <br><br>
+            Never, either way: your GitHub token, your repository, or your
+            solution code. Sharing code is a separate switch in Settings and
+            stays off. You can change all of this any time.
             <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
                target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
           </div>
@@ -522,9 +534,24 @@
             extension version, your theme, which features you use, and every
             submission result — problem, difficulty, language, verdict, runtime
             and memory. It never sends your token, repository, or GitHub
-            username. Turning it off deletes the queue and forgets the ID.
+            username. Turning it off deletes the queue and stops the sending.
             <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
                target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
+          </div>
+
+          <div class="set-row" id="pingRow" style="padding:6px 0;">
+            <span>Count me as an active user</span>
+            <button class="toggle-track" id="pingToggle" type="button"
+                    role="switch" aria-checked="true" aria-label="Count me as an active user">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <div class="form-hint" style="margin-top:8px;">
+            On by default, and the only thing sent while the switch above is
+            off: your random ID and the extension version, at most twice a day,
+            so a dormant install can be told apart from one that simply chose
+            not to report. No problem, no verdict, no theme. Turn this off and
+            nothing leaves your browser at all.
           </div>
 
           <div class="set-row" id="shareCodeRow" style="padding:6px 0;display:none;">

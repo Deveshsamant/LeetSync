@@ -18,6 +18,9 @@ const MAX_NAME = 40;               // must match the client's cap
 const EVENTS = new Set([
   'install', 'update', 'push_ok', 'push_fail', 'tab', 'sheet', 'tracker',
   'export', 'import', 'theme', 'repo_setup', 'submission', 'session',
+  // Sent without the usage-reporting consent, and carries nothing but an
+  // install id and a version. Every other event here implies a consent.
+  'ping',
 ]);
 const DIFFICULTIES = new Set(['Easy', 'Medium', 'Hard', 'Unknown']);
 const THEMES = new Set(['dark', 'light']);

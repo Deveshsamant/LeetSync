@@ -76,8 +76,9 @@ and sent only to api.github.com. It is never transmitted anywhere else.
 
 Usage reporting is OFF unless you switch it on, and you are asked once during
 setup. Sharing your solution code is a separate switch that stays off even
-then. Your GitHub token, repository name and GitHub username are never
-collected. Full policy:
+then. One activity ping — a random ID and the version, twice a day at most — is
+on by default, disclosed at setup, and has its own switch. Your GitHub token,
+repository name and GitHub username are never collected. Full policy:
 https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md
 
 Open source: https://github.com/Deveshsamant/LeetSync
@@ -135,13 +136,13 @@ Injects a content script into leetcode.com problem pages to detect the verdict o
 
 **alarms**
 ```
-Drains the retry queue for pushes that failed while offline, checks the remote configuration for maintenance notices, and sends any queued usage events for users who switched usage reporting on.
+Drains the retry queue for pushes that failed while offline, checks the remote configuration for maintenance notices, sends any queued usage events for users who switched usage reporting on, and sends the twice-daily activity ping for users who have not switched that off.
 ```
 
 **Host permission** — the version you have does not mention the third host.
 The manifest declares three, and an undeclared one is a rejection risk:
 ```
-leetcode.com — to detect accepted submissions and read the solution on the problem page. api.github.com — to commit the solution and README files to the user's own repository. leetsync-analytics.devsamant1744.workers.dev — the developer's own endpoint that receives anonymous usage events, and only for users who have switched usage reporting on; nothing is sent otherwise.
+leetcode.com — to detect accepted submissions and read the solution on the problem page. api.github.com — to commit the solution and README files to the user's own repository. leetsync-analytics.devsamant1744.workers.dev — the developer's own endpoint that receives anonymous usage events for users who have switched usage reporting on, and an activity ping (a random install ID and the extension version, at most twice a day) which is on by default, disclosed during setup, and has its own switch in Settings.
 ```
 
 **Remote code**: No, I am not using Remote code.
@@ -160,7 +161,7 @@ consent screen.
 | Authentication information | **No** | The GitHub token never leaves the device. |
 | Location | **No** | Never collected; there is no column for an IP address. |
 | Web history | **No** | Only the LeetCode problem being solved, not browsing history. |
-| User activity | **Yes** | Which features are used, and every submission verdict, language, runtime and memory. |
+| User activity | **Yes** | Which features are used, and every submission verdict, language, runtime and memory. The activity ping also reports that an install was used, without the reporting opt-in. |
 | Website content | **Yes** | Solution source code — but only under a second, separate opt-in that is off by default. |
 | Health, Financial, Personal communications | **No** | Never collected. |
 

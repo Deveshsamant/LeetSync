@@ -33,6 +33,10 @@ const Analytics = (() => {
   const ID_KEY = 'analyticsInstallId';
   const QUEUE_KEY = 'analyticsQueue';
   const NAME_KEY = 'analyticsDisplayName';
+  const PING_KEY = 'analyticsPing';
+  const PING_AT_KEY = 'analyticsPingAt';
+
+  const PING_EVERY = 12 * 60 * 60 * 1000;  // at most twice a day
 
   const MAX_QUEUE = 200;   // events kept while offline; oldest dropped past this
   const BATCH = 50;        // must match the Worker's MAX_BATCH
@@ -48,6 +52,57 @@ const Analytics = (() => {
   async function isEnabled() {
     const { [CONSENT_KEY]: on } = await local([CONSENT_KEY]);
     return on === true;                       // absent means off
+  }
+
+  /**
+   * The one thing sent without the usage-reporting consent: that this install
+   * was used, and which version it is on. No problem, no verdict, no theme, no
+   * feature — an install id and a clock reading, which is what separates "some
+   * of my users are dormant" from "some of my users declined reporting".
+   *
+   * It is disclosed at setup and in Settings with its own switch, and off
+   * means off: no id is created and nothing is sent.
+   */
+  async function pingEnabled() {
+    const { [PING_KEY]: on } = await local([PING_KEY]);
+    return on !== false;                      // absent means on
+  }
+
+  async function setPing(on) {
+    await setLocal({ [PING_KEY]: on === true });
+  }
+
+  /**
+   * Send the activity ping, at most twice a day.
+   *
+   * Skipped entirely when full reporting is on, because those events already
+   * carry a timestamp and a second signal would only inflate the counts. Not
+   * queued either: a ping that cannot be sent is worthless by the time the
+   * connection returns, so it is dropped rather than stored.
+   */
+  async function heartbeat() {
+    if (!configured() || !await pingEnabled()) return false;
+    if (await isEnabled()) return false;
+
+    const { [PING_AT_KEY]: last } = await local([PING_AT_KEY]);
+    const now = Date.now();
+    if (typeof last === 'number' && now - last < PING_EVERY) return false;
+
+    // Written before the request, not after: a failing endpoint must not turn
+    // into a retry on every service-worker wake-up.
+    await setLocal({ [PING_AT_KEY]: now });
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          events: [{ event: 'ping', ts: now, installId: await installId(), version: version() }],
+        }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -278,8 +333,8 @@ const Analytics = (() => {
 
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
-    displayName, setDisplayName, claimName,
-    CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY,
+    displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
+    CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY, PING_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };
 })();

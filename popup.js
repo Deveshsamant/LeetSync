@@ -230,17 +230,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // buttons lead to the same place, and "Not now" is a real answer rather
   // than a nag that reappears.
   const wizAnalyticsToggle = document.getElementById('wizAnalyticsToggle');
+  const wizPingToggle = document.getElementById('wizPingToggle');
 
-  wizAnalyticsToggle.addEventListener('click', () => {
-    const on = !wizAnalyticsToggle.classList.contains('on');
-    wizAnalyticsToggle.classList.toggle('on', on);
-    wizAnalyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+  const bindToggle = (el) => el.addEventListener('click', () => {
+    const on = !el.classList.contains('on');
+    el.classList.toggle('on', on);
+    el.setAttribute('aria-checked', on ? 'true' : 'false');
   });
+  bindToggle(wizAnalyticsToggle);
+  bindToggle(wizPingToggle);
 
   async function finishConsent(optIn) {
     // setEnabled writes the consent and, when on, creates the install id, so
     // the id exists before the first event rather than on the first send.
     await Analytics.setEnabled(optIn === true);
+    // Taken from the switch either way: "Not now" answers the reporting
+    // question, not this one, and the switch is on screen while it is clicked.
+    await Analytics.setPing(wizPingToggle.classList.contains('on'));
     if (optIn) Analytics.track('session', { detail: 'onboarding_opt_in' });
     wizGoTo(5);
   }
@@ -1436,6 +1442,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Analytics.isEnabled().then(paintAnalyticsToggle);
   Analytics.sharesCode().then(paintShareCodeToggle);
+
+  const pingToggle = document.getElementById('pingToggle');
+  const paintPingToggle = (on) => {
+    pingToggle.classList.toggle('on', on);
+    pingToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+  };
+  Analytics.pingEnabled().then(paintPingToggle);
+  pingToggle.addEventListener('click', async () => {
+    const next = !pingToggle.classList.contains('on');
+    await Analytics.setPing(next);
+    paintPingToggle(next);
+  });
 
   analyticsToggle.addEventListener('click', async () => {
     const next = !analyticsToggle.classList.contains('on');

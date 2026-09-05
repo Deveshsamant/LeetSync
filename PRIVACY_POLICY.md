@@ -1,12 +1,17 @@
 # Privacy Policy — LeetSync
 
-**Last updated:** September 3, 2026
+**Last updated:** September 5, 2026
 
 ## Summary
 
 LeetSync stores your data on your own device and pushes your solutions to your
 own GitHub repository. It also has an **optional** usage-reporting feature that
 is **switched off unless you turn it on**.
+
+One thing is sent without that switch: an **activity ping** — a random ID and
+the extension version, at most twice a day, and nothing else. It is on by
+default, it is disclosed when you set the extension up, and it has its own
+switch in Settings. Turn it off and nothing leaves your browser at all.
 
 ## Data stored on your device
 
@@ -43,7 +48,8 @@ nobody else can take it while you are not using it.
 ## Usage reporting — optional, off by default
 
 Settings → **Usage reporting** enables anonymous usage statistics. While it is
-off, nothing is collected, queued, or sent, and no identifier exists.
+off, none of the data listed below is collected, queued, or sent — only the
+activity ping described in the next section, which has its own switch.
 
 ### If you switch it on, we collect
 
@@ -62,6 +68,27 @@ off, nothing is collected, queued, or sent, and no identifier exists.
   language used, and the length of the solution in characters
 - Whether a push succeeded, and if it failed, a category only
   (`auth`, `network`, or `other`)
+
+### The activity ping — a separate switch, on by default
+
+Settings → **Count me as an active user** is the only thing that sends anything
+while usage reporting is off. It reports:
+
+- The same random install ID
+- The extension version
+- The time it was sent
+
+That is the whole payload. No problem, no verdict, no language, no theme, no
+feature, no username. It is sent at most twice a day, and only while usage
+reporting is off — once reporting is on, its own events already carry a
+timestamp and the ping stops.
+
+It exists to answer one question that reporting cannot: whether an install is
+still in use, or has been sitting unused. Without it, someone who declines
+reporting is indistinguishable from someone who has stopped using LeetSync.
+
+Switch it off and nothing is sent under any circumstance while usage reporting
+is also off.
 
 ### Solution code — a separate switch, also off by default
 
@@ -92,8 +119,9 @@ shared, or used for advertising.
 ### Turning it off
 
 Switching it off immediately deletes any queued events and stops anything
-further being sent. It also switches code sharing off, so turning reporting
-back on cannot silently resume it.
+further being sent, apart from the activity ping above, which has its own
+switch. It also switches code sharing off, so turning reporting back on cannot
+silently resume it.
 
 Your install ID and username are kept, because the username is reserved
 against other users and that reservation is held by the ID — discarding it
