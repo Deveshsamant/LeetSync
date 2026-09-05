@@ -71,6 +71,8 @@ and filters across all of them.
 • Daily streak counter and a 90-day activity calendar
 • Achievements that unlock as you go
 • Battle mode — add a friend by GitHub username and compare progress
+• A public leaderboard — all-time, this week and today, scored Hard 10 /
+  Medium 5 / Easy 3, which you join by switching usage reporting on
 • Every verdict recorded, so you can find the problems that took you 4 tries
 
 ━━━ YOUR TOKEN, YOUR REPO ━━━
@@ -82,7 +84,8 @@ and sent only to api.github.com. It is never transmitted anywhere else.
 ━━━ PRIVACY ━━━
 
 Usage reporting is OFF unless you switch it on, and you are asked once during
-setup. Sharing your solution code is a separate switch that stays off even
+setup. Switching it on is also what puts your username and score on the public
+leaderboard; leave it off and you are not ranked. Sharing your solution code is a separate switch that stays off even
 then. One activity ping — a random ID and the version, twice a day at most — is
 on by default, disclosed at setup, and has its own switch. Your GitHub token,
 repository name and GitHub username are never collected. Full policy:
@@ -164,7 +167,7 @@ consent screen.
 
 | Category | Tick? | Why |
 | --- | --- | --- |
-| Personally identifiable information | **Yes** | The username chosen at setup is user-supplied and identifies them across sessions. |
+| Personally identifiable information | **Yes** | The username chosen at setup is user-supplied, identifies them across sessions, and is shown publicly on the leaderboard. |
 | Authentication information | **No** | The GitHub token never leaves the device. |
 | Location | **No** | Never collected; there is no column for an IP address. |
 | Web history | **No** | Only the LeetCode problem being solved, not browsing history. |

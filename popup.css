@@ -625,7 +625,10 @@ body.theme-light .problems-search { border-width: 2px; background: var(--bg-inpu
 /* Modernist zeroes --pad-tab so every panel is a full-bleed band framed by its
    own border. The chips carry no frame, so at zero padding they sit flush
    against both edges and read as clipped — the band has to be drawn for them. */
-body.theme-light .filter-row {
+/* Scoped to the Solved tab: there the row is a full-bleed panel that has to
+   draw its own band. The same chips inside a card already have that card's
+   padding and border, and a second rule underneath them reads as a stray. */
+body.theme-light #tabProblems > .filter-row {
   padding: 11px 12px;
   border-bottom: 2px solid var(--bd);
 }
@@ -647,6 +650,28 @@ body.theme-light .filter-chip { border-width: 2px; border-radius: 0; font-weight
 .filter-chip:hover { background: var(--bg-hover); color: var(--tx); }
 .filter-chip.active { background: var(--ac-soft); border-color: var(--ac-soft-bd); color: var(--ac); }
 body.theme-light .filter-chip.active { background: var(--bd); border-color: var(--bd); color: var(--bg); }
+
+/* Leaderboard. Deliberately the same row metrics as the weekly bars above it,
+   so the two cards read as one column rather than two designs. */
+.lb-list { display: flex; flex-direction: column; }
+.lb-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  border-top: 1px solid var(--bd-soft);
+}
+.lb-row:first-child { border-top: 0; }
+.lb-rank { font-family: var(--f-label); font-size: 11px; color: var(--tx-4); text-align: right; }
+.lb-row.is-you .lb-rank, .lb-row.is-you .lb-name { color: var(--ac); }
+.lb-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.theme-light .lb-row.is-you .lb-name { font-weight: 700; }
+.lb-points { font-family: var(--f-label); font-size: 12px; font-weight: 600; }
+.lb-sub { font-family: var(--f-label); font-size: 10px; color: var(--tx-4); }
+.lb-empty { font-size: 12px; color: var(--tx-4); padding: 8px 0; }
+.lb-you { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--bd-ctrl); }
+body.theme-light .lb-you { border-top-width: 2px; border-top-color: var(--bd); }
 
 .problems-list {
   border: var(--bw) solid var(--bd);

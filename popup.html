@@ -136,7 +136,9 @@
           <div class="form-hint">
             If you turn the first one on: your username, the extension version,
             your theme, which features you use, and every submission result —
-            problem, difficulty, language, verdict, runtime and memory.
+            problem, difficulty, language, verdict, runtime and memory. It also
+            enters you on the public leaderboard, where your username and score
+            are visible to every other LeetSync user.
             <br><br>
             The second is on by default and is all that is sent if you leave
             the first off: a random ID and the version, at most twice a day.
@@ -415,6 +417,23 @@
 
         <div class="card">
           <div class="weekly-head">
+            <div class="sec-label">LEADERBOARD</div>
+            <div class="filter-row" id="lbRange" style="gap:5px;">
+              <button class="filter-chip active" data-range="allTime">ALL TIME</button>
+              <button class="filter-chip" data-range="weekly">WEEK</button>
+              <button class="filter-chip" data-range="daily">TODAY</button>
+            </div>
+          </div>
+          <div class="form-hint" style="margin:8px 0 10px;">
+            Hard 10 &middot; Medium 5 &middot; Easy 3, counted once per problem.
+          </div>
+          <div id="lbList" class="lb-list"></div>
+          <div id="lbYou" class="lb-you" style="display:none;"></div>
+          <div id="lbNote" class="form-hint" style="margin-top:9px;display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="weekly-head">
             <div class="sec-label">WEEKLY CHALLENGE</div>
             <div class="sec-label" id="weeklyReset">RESETS MON</div>
           </div>
@@ -533,8 +552,11 @@
             Off unless you turn it on. When on, LeetSync sends a random ID, the
             extension version, your theme, which features you use, and every
             submission result — problem, difficulty, language, verdict, runtime
-            and memory. It never sends your token, repository, or GitHub
-            username. Turning it off deletes the queue and stops the sending.
+            and memory. It also puts your username and score on the public
+            leaderboard in the Battle tab, where every LeetSync user can see
+            them. It never sends your token, repository, or GitHub
+            username. Turning it off deletes the queue, stops the sending, and
+            takes you off the leaderboard.
             <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
                target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
           </div>
@@ -575,6 +597,8 @@
               The name you chose at setup. It labels your usage data instead of a
               random ID, and is unique across LeetSync users — changing it checks
               the new one is free. Clearing it puts you back to the random ID.
+              While usage reporting is on this is the name other users see on the
+              leaderboard; clear it and you show up as Anonymous.
             </div>
             <div id="displayNameError" class="status-message status-error" style="display:none;margin-top:8px;"></div>
           </div>

@@ -47,6 +47,21 @@ LeetSync is a Chrome extension that watches for your LeetCode submissions in the
 
 ---
 
+## 🏆 Leaderboard
+
+The Battle tab carries a public leaderboard — all-time, this week and today,
+with your own position shown even when you are outside the top ten.
+
+Scoring is **Hard 10, Medium 5, Easy 3**, counted once per problem, so
+re-submitting the same question cannot farm points. A problem counts from the
+first time you solved it, which is also what places it in the daily and weekly
+boards.
+
+You join by switching usage reporting on in Settings — that is what sends the
+solves the board is built from. Anyone can look; only people who opted in are
+ranked, and the board shows usernames and scores, never install IDs or which
+problems anyone solved.
+
 ## 💻 Two computers, one account
 
 Sign in on a second machine with the same token and repository and it catches

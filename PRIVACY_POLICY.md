@@ -68,7 +68,8 @@ activity ping described in the next section, which has its own switch.
 - A random install ID generated on your device. It is not derived from your
   name, email, GitHub account, or anything else about you.
 - **Your username** — the one you chose when connecting GitHub. It labels your
-  usage data in place of the random ID.
+  usage data in place of the random ID, and is shown publicly on the
+  leaderboard described below.
 - The extension version, and which of the two themes you are using
 - Which features you use — which tab you open, which study sheet you select,
   when you open the tracker, export or import data, or change theme
@@ -80,6 +81,18 @@ activity ping described in the next section, which has its own switch.
   language used, and the length of the solution in characters
 - Whether a push succeeded, and if it failed, a category only
   (`auth`, `network`, or `other`)
+
+### The leaderboard is public
+
+While usage reporting is on, you are ranked on a leaderboard that every
+LeetSync user can see in the Battle tab. It shows your **username** and your
+score — points, problems solved, and the split between Hard, Medium and Easy.
+
+It never shows your install ID, your repository, your GitHub account, or which
+problems you solved. Clear your username in Settings and you appear as
+"Anonymous"; switch usage reporting off and you are not ranked at all.
+
+Scores are Hard 10, Medium 5, Easy 3, counted once per problem.
 
 ### The activity ping — a separate switch, on by default
 

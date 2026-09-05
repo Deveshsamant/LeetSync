@@ -1514,6 +1514,112 @@ document.addEventListener('DOMContentLoaded', () => {
   const SYNC_KEYS = ['githubRepo', 'uiTheme', 'readmeTheme', 'activeSheet', 'friends'];
 
   // ═══════════════════════════════════════════════════════════
+  // LEADERBOARD
+  //
+  // Anyone can look; only installs that switched usage reporting on have
+  // rows to be ranked in. That is enforced by the data rather than by a
+  // check here — an install that never reported has nothing on the board —
+  // but the note below says so plainly rather than leaving someone to
+  // wonder why they are missing.
+  // ═══════════════════════════════════════════════════════════
+  let boardData = null;
+  let boardRange = 'allTime';
+
+  const lbList = document.getElementById('lbList');
+  const lbYou = document.getElementById('lbYou');
+  const lbNote = document.getElementById('lbNote');
+
+  function lbRow({ rank, name, points, solved, hard, medium, easy }, isYou) {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (isYou ? ' is-you' : '');
+
+    const r = document.createElement('span');
+    r.className = 'lb-rank';
+    r.textContent = '#' + rank;
+
+    const who = document.createElement('span');
+    who.className = 'lb-name';
+    who.textContent = isYou ? `${name} (you)` : name;
+    who.title = who.textContent;
+
+    const score = document.createElement('span');
+    score.style.textAlign = 'right';
+    const pts = document.createElement('div');
+    pts.className = 'lb-points';
+    pts.textContent = points + ' pts';
+    const sub = document.createElement('div');
+    sub.className = 'lb-sub';
+    // The breakdown is the point of the scoring, so show what earned them.
+    sub.textContent = `${solved} solved · ${hard}H ${medium}M ${easy}E`;
+    score.append(pts, sub);
+
+    row.append(r, who, score);
+    return row;
+  }
+
+  function paintBoard() {
+    const board = boardData && boardData[boardRange];
+    lbList.innerHTML = '';
+    lbYou.style.display = 'none';
+    lbNote.style.display = 'none';
+
+    if (!boardData) {
+      const empty = document.createElement('div');
+      empty.className = 'lb-empty';
+      empty.textContent = 'Could not load the leaderboard.';
+      lbList.appendChild(empty);
+      return;
+    }
+
+    if (!board || !board.top.length) {
+      const empty = document.createElement('div');
+      empty.className = 'lb-empty';
+      empty.textContent = boardRange === 'daily'
+        ? 'Nobody has solved anything yet today.'
+        : 'No scores in this window yet.';
+      lbList.appendChild(empty);
+    } else {
+      const mine = board.you;
+      for (const entry of board.top) {
+        lbList.appendChild(lbRow(entry, mine && entry.rank === mine.rank));
+      }
+    }
+
+    // Shown only when they are outside the ten already on screen, so their
+    // own row is never printed twice.
+    if (board && board.you && board.you.rank > board.top.length) {
+      lbYou.innerHTML = '';
+      lbYou.appendChild(lbRow({ ...board.you, name: board.you.name || 'You' }, true));
+      lbYou.style.display = 'block';
+    }
+
+    if (board && !board.you) {
+      lbNote.textContent = analyticsOn
+        ? 'Solve a problem to get on the board.'
+        : 'Turn on "Share usage data" in Settings to be ranked here.';
+      lbNote.style.display = 'block';
+    }
+  }
+
+  let analyticsOn = false;
+  Analytics.isEnabled().then((on) => { analyticsOn = on; });
+
+  document.getElementById('lbRange').addEventListener('click', (event) => {
+    const chip = event.target.closest('.filter-chip');
+    if (!chip) return;
+    boardRange = chip.dataset.range;
+    for (const other of document.querySelectorAll('#lbRange .filter-chip')) {
+      other.classList.toggle('active', other === chip);
+    }
+    paintBoard();
+  });
+
+  Analytics.leaderboard(10).then((data) => {
+    boardData = data;
+    paintBoard();
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // DEVICES
   //
   // The merge itself lives in the service worker; this only asks for it and

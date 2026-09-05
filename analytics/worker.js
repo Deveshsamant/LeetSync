@@ -439,6 +439,115 @@ async function dayDetail(env, date) {
 }
 
 /**
+ * Public leaderboard.
+ *
+ * Hard 10, Medium 5, Easy 3 — scored per problem, not per event, so
+ * re-submitting the same question cannot farm points. A problem counts from
+ * the first time it was solved, which is also what places it in the daily and
+ * weekly boards.
+ *
+ * Only installs that switched usage reporting on can appear at all: every
+ * other install sends nothing but `ping`, which carries no slug and so never
+ * reaches the solves table below. That is the participation rule enforced by
+ * the data rather than by a flag someone could forget to check.
+ *
+ * Names, never ids. The board is world-readable, so an install with no chosen
+ * username shows as "Anonymous" instead of leaking an identifier that could be
+ * correlated across requests. A caller still gets its own rank by sending its
+ * own id, which it obviously already knows.
+ *
+ * Windows are UTC days, matching how ts is stored.
+ */
+const POINTS = { Hard: 10, Medium: 5, Easy: 3 };
+
+const SOLVES_CTE = `
+  WITH solves AS (
+    SELECT install_id, slug,
+           MIN(ts) AS first_ts,
+           MAX(difficulty) AS difficulty
+    FROM events
+    WHERE slug IS NOT NULL
+      AND (event = 'push_ok' OR status = 'Accepted')
+    GROUP BY install_id, slug
+  ),
+  scored AS (
+    SELECT install_id, first_ts,
+           CASE difficulty
+             WHEN 'Hard' THEN ${POINTS.Hard}
+             WHEN 'Medium' THEN ${POINTS.Medium}
+             WHEN 'Easy' THEN ${POINTS.Easy}
+             ELSE 0
+           END AS points,
+           difficulty
+    FROM solves
+  )`;
+
+/** One board. `since` of 0 means all time. */
+async function board(env, since, limit) {
+  return all(env, `${SOLVES_CTE}
+    SELECT install_id,
+           SUM(points) AS points,
+           COUNT(*) AS solved,
+           SUM(CASE WHEN difficulty = 'Hard' THEN 1 ELSE 0 END) AS hard,
+           SUM(CASE WHEN difficulty = 'Medium' THEN 1 ELSE 0 END) AS medium,
+           SUM(CASE WHEN difficulty = 'Easy' THEN 1 ELSE 0 END) AS easy,
+           MAX(first_ts) AS last_ts
+    FROM scored
+    WHERE first_ts >= ?
+    GROUP BY install_id
+    HAVING points > 0
+    ORDER BY points DESC, solved DESC, last_ts ASC
+    LIMIT ?`, since, limit);
+}
+
+const startOfUtcDay = (now) => Date.UTC(
+  new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
+
+async function leaderboard(env, installId, limit) {
+  const now = Date.now();
+  const dayStart = startOfUtcDay(now);
+  const weekStart = dayStart - 6 * 86400000;      // today plus the six before it
+
+  const [names, allTime, weekly, daily] = await Promise.all([
+    nameMap(env),
+    board(env, 0, 200),
+    board(env, weekStart, 200),
+    board(env, dayStart, 200),
+  ]);
+
+  const shape = (rows) => {
+    const ranked = rows.map((row, i) => ({
+      rank: i + 1,
+      name: names.get(row.install_id) || null,
+      points: row.points,
+      solved: row.solved,
+      hard: row.hard,
+      medium: row.medium,
+      easy: row.easy,
+    }));
+    const mine = installId
+      ? ranked[rows.findIndex(r => r.install_id === installId)] || null
+      : null;
+    return {
+      top: ranked.slice(0, limit).map(r => ({ ...r, name: r.name || 'Anonymous' })),
+      you: mine,
+      players: ranked.length,
+    };
+  };
+
+  return {
+    generatedAt: now,
+    points: POINTS,
+    // Stated rather than implied: a client showing "today" needs to know whose
+    // midnight it is before it labels the column.
+    window: { dayStart, weekStart, timezone: 'UTC' },
+    allTime: shape(allTime),
+    weekly: shape(weekly),
+    daily: shape(daily),
+  };
+}
+
+/**
  * Usernames must be unique across every install, so the check cannot live on
  * the device — two people would happily pick the same one offline. This is
  * the authority: a name belongs to whichever install holds its row.
@@ -630,6 +739,17 @@ export default {
         return json({ error: 'unknown endpoint' }, 404);
       } catch (error) {
         return json({ error: 'query failed', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
+    // Public like ingest: every user's extension reads this, and it returns
+    // names and scores only — no install ids, no events.
+    if (url.pathname === '/leaderboard') {
+      try {
+        const mine = str(url.searchParams.get('installId'), 64);
+        return json(await leaderboard(env, mine, int('limit', 10, 1, 50)));
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
       }
     }
 

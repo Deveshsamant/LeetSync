@@ -106,6 +106,28 @@ const Analytics = (() => {
   }
 
   /**
+   * The public leaderboard. Readable by anyone — being ranked is what needs
+   * the consent, not looking.
+   *
+   * The install id is sent only when usage reporting is on. Without it the
+   * caller has no rows on the board to be found in, so there is nothing to
+   * look up, and sending an identifier for someone who declined reporting is
+   * exactly the thing that consent is protecting them from.
+   */
+  async function leaderboard(limit = 10) {
+    if (!configured()) return null;
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (await isEnabled()) params.set('installId', await installId());
+    try {
+      const res = await fetch(`${ENDPOINT}/leaderboard?${params}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Second, independent consent. Source code is the user's own work and can
    * carry names or notes in comments, so it needs its own yes — one the
    * general usage toggle never grants.
@@ -334,6 +356,7 @@ const Analytics = (() => {
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
+    leaderboard,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY, PING_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };
