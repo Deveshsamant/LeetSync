@@ -673,6 +673,17 @@ body.theme-light .lb-row.is-you .lb-name { font-weight: 700; }
 .lb-you { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--bd-ctrl); }
 body.theme-light .lb-you { border-top-width: 2px; border-top-color: var(--bd); }
 
+.broadcast-text { font-size: 13.5px; line-height: 1.55; color: var(--tx-2); white-space: pre-wrap; }
+.broadcast-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--ac);
+  text-decoration: none;
+  font-family: var(--f-label);
+  font-size: 11px;
+}
+.broadcast-link:hover { text-decoration: underline; }
+
 .problems-list {
   border: var(--bw) solid var(--bd);
   background: var(--bg-card);

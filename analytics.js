@@ -106,6 +106,26 @@ const Analytics = (() => {
   }
 
   /**
+   * The current broadcast, or null.
+   *
+   * A plain read that sends nothing — no install id, no consent needed, and
+   * the server learns nothing about who asked beyond the request itself. It
+   * replaces polling a config file in the repo, so a message can go out
+   * without shipping a commit.
+   */
+  async function announcement() {
+    if (!configured()) return null;
+    try {
+      const res = await fetch(`${ENDPOINT}/announcement`);
+      if (!res.ok) return null;
+      const body = await res.json();
+      return (body && body.announcement) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * The public leaderboard. Readable by anyone — being ranked is what needs
    * the consent, not looking.
    *
@@ -356,7 +376,7 @@ const Analytics = (() => {
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
-    leaderboard,
+    leaderboard, announcement,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY, PING_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };

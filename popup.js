@@ -1514,6 +1514,43 @@ document.addEventListener('DOMContentLoaded', () => {
   const SYNC_KEYS = ['githubRepo', 'uiTheme', 'readmeTheme', 'activeSheet', 'friends'];
 
   // ═══════════════════════════════════════════════════════════
+  // BROADCAST
+  //
+  // Shown once per message. The dismissal is keyed by the message's id
+  // rather than a boolean or its text: a boolean would swallow every later
+  // message, and text would re-show one that was merely re-sent.
+  // ═══════════════════════════════════════════════════════════
+  const DISMISSED_BROADCAST = 'dismissedBroadcastId';
+
+  Analytics.announcement().then((note) => {
+    if (!note || !note.message) return;
+    chrome.storage.local.get([DISMISSED_BROADCAST], (data) => {
+      if (data && data[DISMISSED_BROADCAST] === note.id) return;
+
+      const modal = document.getElementById('broadcastModal');
+      document.getElementById('broadcastText').textContent = note.message;
+      if (note.title) document.getElementById('broadcastTitle').textContent = note.title;
+
+      const link = document.getElementById('broadcastLink');
+      // The worker refuses anything but https, and this checks again rather
+      // than trusting that: the value ends up in an href.
+      if (note.url && /^https:\/\//i.test(note.url)) {
+        link.href = note.url;
+        link.style.display = 'inline-block';
+      }
+
+      const close = () => {
+        modal.style.display = 'none';
+        chrome.storage.local.set({ [DISMISSED_BROADCAST]: note.id });
+      };
+      document.getElementById('broadcastClose').addEventListener('click', close);
+      modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+      modal.style.display = 'flex';
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // LEADERBOARD
   //
   // Anyone can look; only installs that switched usage reporting on have

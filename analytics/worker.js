@@ -439,6 +439,65 @@ async function dayDetail(env, date) {
 }
 
 /**
+ * Broadcasts — the developer speaking to every user at once.
+ *
+ * The read is public because every extension polls it, and it deliberately
+ * returns one row and nothing else: no counts, no history, nothing about who
+ * has seen it. Writing needs the dashboard key.
+ *
+ * Sending deactivates whatever came before, so there is only ever one live
+ * message. Two at once would race for the same modal and the loser would
+ * never be seen.
+ */
+const ANNOUNCE_TYPES = new Set(['info', 'warn', 'success']);
+const MAX_ANNOUNCE = 400;
+
+async function liveAnnouncement(env) {
+  const rows = await all(env,
+    `SELECT id, title, message, type, url, created_at
+     FROM announcements WHERE active = 1
+     ORDER BY created_at DESC, id DESC LIMIT 1`);
+  return { announcement: rows[0] || null };
+}
+
+async function sendAnnouncement(env, body) {
+  const message = str(body && body.message, MAX_ANNOUNCE);
+  if (!message) return json({ error: 'message is required' }, 400);
+
+  const title = str(body && body.title, 80);
+  const url = str(body && body.url, 300);
+  if (url && !/^https:\/\//i.test(url)) {
+    // The extension renders this as a link, so anything but https is refused
+    // here rather than left for the client to decide.
+    return json({ error: 'url must be https' }, 400);
+  }
+  const rawType = str(body && body.type, 20);
+  const type = ANNOUNCE_TYPES.has(rawType) ? rawType : 'info';
+
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1'),
+    env.DB.prepare(`INSERT INTO announcements (title, message, type, url, created_at, active)
+                    VALUES (?, ?, ?, ?, ?, 1)`).bind(title, message, type, url, now),
+  ]);
+  return json(await liveAnnouncement(env));
+}
+
+async function clearAnnouncements(env) {
+  await env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1').run();
+  return json({ announcement: null, cleared: true });
+}
+
+/** What was sent, for the dashboard's own history list. */
+async function announcementHistory(env, limit) {
+  return {
+    rows: await all(env,
+      `SELECT id, title, message, type, url, created_at, active
+       FROM announcements ORDER BY created_at DESC, id DESC LIMIT ?`, limit),
+  };
+}
+
+/**
  * Public leaderboard.
  *
  * Hard 10, Medium 5, Easy 3 — scored per problem, not per event, so
@@ -736,9 +795,23 @@ export default {
           return json(rows[0]);
         }
 
+        if (url.pathname === '/api/announcements') {
+          return json(await announcementHistory(env, int('limit', 20, 1, 100)));
+        }
+
         return json({ error: 'unknown endpoint' }, 404);
       } catch (error) {
         return json({ error: 'query failed', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
+    // Public: every extension and the dashboard poll this for the current
+    // broadcast. One row, and nothing about who has read it.
+    if (url.pathname === '/announcement') {
+      try {
+        return json(await liveAnnouncement(env));
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
       }
     }
 
@@ -757,6 +830,24 @@ export default {
 
     // Claiming a name is a client operation, so it sits outside the read API
     // and its key. It is still write-only from the caller's point of view.
+    // Sending is the one write the dashboard makes, so it carries the key.
+    if (url.pathname === '/api/announcement') {
+      if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400);
+      }
+      try {
+        return payload && payload.clear === true
+          ? await clearAnnouncements(env)
+          : await sendAnnouncement(env, payload);
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
     if (url.pathname === '/claim-name') {
       let claim;
       try {

@@ -161,6 +161,13 @@ Settings to release it and go back to being identified only by a random ID.
   you visit, to detect accepted solutions.
 - **raw.githubusercontent.com** — the extension fetches a public configuration
   file and the study-sheet definitions. No user data is sent in these requests.
+- **leetsync-analytics.devsamant1744.workers.dev** — besides usage reporting,
+  the extension reads two public things from this endpoint: the current
+  broadcast message, and the leaderboard. Both are plain reads that send no
+  identifier and happen whatever your reporting setting is; as with any web
+  request, the server sees that a request arrived. Your own leaderboard
+  position is the one exception, and asking for it sends your install ID —
+  which only happens while usage reporting is on.
 
 ## Data retention and removal
 
