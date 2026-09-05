@@ -289,7 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // name and only find out later.
     next.disabled = true;
     next.textContent = 'Checking…';
-    const claim = await Analytics.claimName(name);
+    const claim = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'CLAIM_NAME', name }, (res) => {
+        resolve(chrome.runtime.lastError ? { ok: false, reason: 'offline' } : res);
+      });
+    });
     next.disabled = false;
     next.textContent = 'Next →';
 
@@ -1480,12 +1484,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (wanted === lastClaimed) return;
     const error = document.getElementById('displayNameError');
     error.style.display = 'none';
+    error.className = 'status-message status-error';
     displayNameInput.style.borderColor = '';
 
-    const claim = await Analytics.claimName(wanted);
-    if (claim.ok) {
+    // Sent to the worker rather than fetched here: a popup unloads the
+    // moment it closes, and that is precisely when a blur fires.
+    const claim = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'CLAIM_NAME', name: wanted }, (res) => {
+        resolve(chrome.runtime.lastError ? { ok: false, reason: 'offline' } : res);
+      });
+    });
+
+    if (claim && claim.ok) {
       lastClaimed = claim.name || '';
       displayNameInput.value = lastClaimed;
+      error.textContent = lastClaimed
+        ? `Saved — you appear as "${lastClaimed}".`
+        : 'Username cleared.';
+      error.className = 'status-message status-success';
+      error.style.display = 'block';
       return;
     }
     // Keep what they typed so it can be edited, but say why it did not take
@@ -1501,6 +1518,14 @@ document.addEventListener('DOMContentLoaded', () => {
   Analytics.displayName().then((name) => { lastClaimed = name || ''; });
   displayNameInput.addEventListener('change', reclaimDisplayName);
   displayNameInput.addEventListener('blur', reclaimDisplayName);
+  // Enter is how people finish a single-line field, and it does not depend on
+  // the popup still being open a moment later.
+  displayNameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      displayNameInput.blur();
+    }
+  });
 
   // ═══════════════════════════════════════════════════════════
   // EXPORT / IMPORT
@@ -1530,6 +1555,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const modal = document.getElementById('broadcastModal');
       document.getElementById('broadcastText').textContent = note.message;
       if (note.title) document.getElementById('broadcastTitle').textContent = note.title;
+
+      // The tone is what makes a warning look like one. Whitelisted rather
+      // than interpolated: this value ends up in a class name.
+      const tone = ['warn', 'success', 'info'].includes(note.type) ? note.type : 'info';
+      modal.querySelector('.modal').className = 'modal tone-' + tone;
+      document.getElementById('broadcastKind').textContent =
+        { warn: 'WARNING', success: 'GOOD NEWS', info: 'NOTICE' }[tone];
 
       const link = document.getElementById('broadcastLink');
       // The worker refuses anything but https, and this checks again rather

@@ -673,6 +673,80 @@ body.theme-light .lb-row.is-you .lb-name { font-weight: 700; }
 .lb-you { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--bd-ctrl); }
 body.theme-light .lb-you { border-top-width: 2px; border-top-color: var(--bd); }
 
+/* ── Broadcast tone ─────────────────────────────────────────
+   The three kinds have to be distinguishable before a word is read: a
+   warning that looks like an announcement gets treated like one. Warn
+   therefore alarms — a red edge and a light behind it that beats — while
+   success and info state their colour and stay still. The beat stops the
+   moment the modal is dismissed, because a warning nobody can dismiss is
+   just noise. */
+
+.modal.tone-warn   { --tone: #f0736a; --tone-soft: rgba(240, 115, 106, .16); }
+.modal.tone-success{ --tone: #3fe08b; --tone-soft: rgba(63, 224, 139, .14); }
+.modal.tone-info   { --tone: #4a9df0; --tone-soft: rgba(74, 157, 240, .14); }
+body.theme-light .modal.tone-warn    { --tone: #c81e0c; --tone-soft: rgba(200, 30, 12, .12); }
+body.theme-light .modal.tone-success { --tone: #128a4a; --tone-soft: rgba(18, 138, 74, .12); }
+body.theme-light .modal.tone-info    { --tone: #1560c4; --tone-soft: rgba(21, 96, 196, .12); }
+
+.modal[class*="tone-"] {
+  border: 2px solid var(--tone);
+  position: relative;
+  overflow: hidden;
+}
+.modal[class*="tone-"] .modal-title { color: var(--tone); }
+
+/* The light behind a warning. Only warn animates; the other two are lit but
+   steady, which is the difference between "look now" and "worth knowing". */
+.modal.tone-warn::before,
+.modal.tone-success::before,
+.modal.tone-info::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tone-soft);
+  pointer-events: none;
+  z-index: 0;
+}
+.modal.tone-warn::before { animation: lsAlarm 1.1s steps(1) infinite; }
+
+@keyframes lsAlarm {
+  0%, 49%  { opacity: 1; }
+  50%, 100%{ opacity: .18; }
+}
+
+/* A warning wears a bar down its leading edge as well, so it reads as urgent
+   in the corner of the eye rather than only head-on. */
+.modal.tone-warn::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--tone);
+  animation: lsAlarm 1.1s steps(1) infinite;
+  pointer-events: none;
+}
+
+.modal[class*="tone-"] .modal-head,
+.modal[class*="tone-"] .modal-body { position: relative; z-index: 1; }
+
+.broadcast-kind {
+  display: inline-block;
+  font-family: var(--f-label);
+  font-size: 9.5px;
+  letter-spacing: .14em;
+  padding: 3px 8px;
+  margin-bottom: 10px;
+  color: var(--tone);
+  border: 1px solid var(--tone);
+}
+body.theme-light .broadcast-kind { border-width: 2px; font-weight: 700; }
+
+/* Someone sensitive to flashing should not be made to sit through it. */
+@media (prefers-reduced-motion: reduce) {
+  .modal.tone-warn::before,
+  .modal.tone-warn::after { animation: none; opacity: 1; }
+}
+
 .broadcast-text { font-size: 13.5px; line-height: 1.55; color: var(--tx-2); white-space: pre-wrap; }
 .broadcast-link {
   display: inline-block;

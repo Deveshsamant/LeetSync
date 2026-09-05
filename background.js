@@ -672,6 +672,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Claiming from the popup meant the request died whenever the popup
+  // closed — which is exactly when someone finishes typing a name and clicks
+  // away. The worker outlives the popup, so it makes the call.
+  if (message.type === 'CLAIM_NAME') {
+    Analytics.claimName(message.name)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ ok: false, reason: 'server', detail: error.message }));
+    return true;
+  }
+
   if (message.type === 'GET_SYNC_STATUS') {
     chrome.storage.local.get([LAST_SYNC_KEY], (data) => {
       sendResponse({ lastSync: data[LAST_SYNC_KEY] || null });
