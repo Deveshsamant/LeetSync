@@ -546,19 +546,35 @@ const MAX_ANNOUNCE = 400;
   * being announced at.
   */
 async function liveAnnouncement(env, installId) {
+  // A reply reads as a non-sequitur without the thing it answers, so the row
+  // brings its own quote — the message this person wrote, and which of the
+  // three kinds they filed it as. LEFT JOIN because a broadcast has none.
+  const COLS = `a.id, a.title, a.message, a.type, a.url, a.created_at,
+                a.target_install, a.feedback_id,
+                f.kind AS quote_kind, f.message AS quote_message,
+                f.created_at AS quote_at`;
+
   const rows = installId
     ? await all(env,
-        `SELECT id, title, message, type, url, created_at, target_install, feedback_id
-         FROM announcements
-         WHERE active = 1 AND (target_install IS NULL OR target_install = ?)
-         ORDER BY (target_install IS NOT NULL) DESC, created_at DESC, id DESC
+        `SELECT ${COLS} FROM announcements a
+         LEFT JOIN feedback f ON f.id = a.feedback_id
+         WHERE a.active = 1 AND (a.target_install IS NULL OR a.target_install = ?)
+         ORDER BY (a.target_install IS NOT NULL) DESC, a.created_at DESC, a.id DESC
          LIMIT 1`, installId)
     : await all(env,
-        `SELECT id, title, message, type, url, created_at, target_install, feedback_id
-         FROM announcements
-         WHERE active = 1 AND target_install IS NULL
-         ORDER BY created_at DESC, id DESC LIMIT 1`);
-  return { announcement: rows[0] || null };
+        `SELECT ${COLS} FROM announcements a
+         LEFT JOIN feedback f ON f.id = a.feedback_id
+         WHERE a.active = 1 AND a.target_install IS NULL
+         ORDER BY a.created_at DESC, a.id DESC LIMIT 1`);
+
+  const row = rows[0];
+  if (!row) return { announcement: null };
+
+  const { quote_kind, quote_message, quote_at, ...announcement } = row;
+  if (quote_message) {
+    announcement.quote = { kind: quote_kind, message: quote_message, createdAt: quote_at };
+  }
+  return { announcement };
 }
 
 async function sendAnnouncement(env, body) {

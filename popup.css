@@ -747,6 +747,29 @@ body.theme-light .broadcast-kind { border-width: 2px; font-weight: 700; }
   .modal.tone-warn::after { animation: none; opacity: 1; }
 }
 
+/* What you wrote, above what came back — a reply on its own reads as a
+   non-sequitur days later, when you have forgotten sending anything. */
+.broadcast-quote {
+  display: block;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--tone, var(--bd-ctrl));
+  background: var(--bg-hover);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--tx-3);
+}
+body.theme-light .broadcast-quote { border-left-width: 4px; }
+.broadcast-quote-label {
+  display: block;
+  font-family: var(--f-label);
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: var(--tx-4);
+  margin-bottom: 4px;
+}
+.broadcast-quote-text { display: block; white-space: pre-wrap; }
+
 .broadcast-text { font-size: 13.5px; line-height: 1.55; color: var(--tx-2); white-space: pre-wrap; }
 .broadcast-link {
   display: inline-block;

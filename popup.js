@@ -1568,6 +1568,15 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('broadcastKind').textContent =
         { warn: 'WARNING', success: 'GOOD NEWS', info: 'NOTICE' }[tone];
 
+      // Only a reply has one; a broadcast answers nothing.
+      const quote = document.getElementById('broadcastQuote');
+      if (note.quote && note.quote.message) {
+        document.getElementById('broadcastQuoteLabel').textContent =
+          `YOUR ${String(note.quote.kind || 'message').toUpperCase()}`;
+        document.getElementById('broadcastQuoteText').textContent = note.quote.message;
+        quote.style.display = 'block';
+      }
+
       const link = document.getElementById('broadcastLink');
       // The worker refuses anything but https, and this checks again rather
       // than trusting that: the value ends up in an href.
