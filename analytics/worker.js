@@ -16,8 +16,13 @@ const MAX_BODY = 2 * 1024 * 1024;  // a batch carrying code can reach ~1 MB
 const MAX_CODE = 20000;            // must match the client's cap
 const MAX_NAME = 40;               // must match the client's cap
 const EVENTS = new Set([
-  'install', 'update', 'push_ok', 'push_fail', 'tab', 'sheet', 'tracker',
-  'export', 'import', 'theme', 'repo_setup', 'submission', 'session',
+  'install', 'update', 'push_ok', 'push_fail', 'sheet', 'tracker',
+  'export', 'import', 'theme', 'readme_theme', 'repo_setup', 'submission',
+  // 'tab' and 'session' were 91% of everything stored and answered nothing:
+  // which panel someone looked at does not tell you whether the product
+  // works. Dropped here as well as at the client, so an extension that has
+  // not updated yet stops adding to the pile — the rest of its batch is
+  // still accepted, since clean() filters rows rather than rejecting sends.
   // Sent without the usage-reporting consent, and carries nothing but an
   // install id and a version. Every other event here implies a consent.
   'ping',

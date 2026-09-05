@@ -95,13 +95,13 @@ test('worker rejects unknown event names', () => {
 });
 
 test('worker requires an install id', () => {
-  assert.equal(clean({ event: 'tab' }), null);
-  assert.equal(clean({ event: 'tab', installId: '   ' }), null);
+  assert.equal(clean({ event: 'push_ok' }), null);
+  assert.equal(clean({ event: 'push_ok', installId: '   ' }), null);
 });
 
 test('worker stores no field outside the schema', () => {
   const row = clean({
-    installId: 'a', event: 'tab',
+    installId: 'a', event: 'push_ok',
     githubToken: 'ghp_secret', repo: 'me/solutions', ip: '1.2.3.4', email: 'a@b.c',
   });
   assert.deepEqual(Object.keys(row).sort(), [
@@ -114,11 +114,11 @@ test('worker stores no field outside the schema', () => {
 
 test('a display name is optional and never invented', () => {
   // Absent means anonymous; the Worker must not substitute anything.
-  assert.equal(clean({ installId: 'a', event: 'session' }).display_name, null);
-  assert.equal(clean({ installId: 'a', event: 'session', name: '   ' }).display_name, null);
-  assert.equal(clean({ installId: 'a', event: 'session', name: 'Devesh' }).display_name, 'Devesh');
+  assert.equal(clean({ installId: 'a', event: 'theme' }).display_name, null);
+  assert.equal(clean({ installId: 'a', event: 'theme', name: '   ' }).display_name, null);
+  assert.equal(clean({ installId: 'a', event: 'theme', name: 'Devesh' }).display_name, 'Devesh');
   assert.equal(
-    clean({ installId: 'a', event: 'session', name: 'x'.repeat(200) }).display_name.length, 40);
+    clean({ installId: 'a', event: 'theme', name: 'x'.repeat(200) }).display_name.length, 40);
 });
 
 test('pick() never carries a display name from a caller', () => {
@@ -227,12 +227,12 @@ test('worker folds an unrecognised verdict into Other', () => {
 });
 
 test('worker accepts only the two real themes', () => {
-  assert.equal(clean({ installId: 'a', event: 'session', theme: 'light' }).theme, 'light');
-  assert.equal(clean({ installId: 'a', event: 'session', theme: 'cyberpunk' }).theme, null);
+  assert.equal(clean({ installId: 'a', event: 'theme', theme: 'light' }).theme, 'light');
+  assert.equal(clean({ installId: 'a', event: 'theme', theme: 'cyberpunk' }).theme, null);
 });
 
 test('worker accepts the new event names', () => {
-  for (const event of ['submission', 'session']) {
+  for (const event of ['submission', 'theme']) {
     assert.ok(clean({ installId: 'a', event }), `${event} must be storable`);
   }
 });
@@ -360,5 +360,25 @@ test('a webhook that throws does not escape the cron', async () => {
     assert.match(out.error, /ECONNREFUSED/);
   } finally {
     globalThis.fetch = realFetch;
+  }
+});
+
+/**
+ * `tab` and `session` were 91% of everything stored and answered nothing —
+ * which panel someone opened does not tell you whether the product works.
+ * They are refused here as well as unsent, so an extension that has not
+ * updated stops adding to the pile.
+ */
+test('the retired noisy events are refused', () => {
+  for (const event of ['tab', 'session']) {
+    assert.equal(clean({ installId: 'a', event }), null, `${event} should be dropped`);
+  }
+});
+
+test('the events worth keeping still pass', () => {
+  for (const event of ['install', 'update', 'push_ok', 'push_fail', 'submission',
+                       'sheet', 'tracker', 'export', 'import', 'theme',
+                       'readme_theme', 'repo_setup', 'ping']) {
+    assert.ok(clean({ installId: 'a', event }), `${event} should be accepted`);
   }
 });

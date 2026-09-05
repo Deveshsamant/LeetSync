@@ -70,9 +70,14 @@ activity ping described in the next section, which has its own switch.
 - **Your username** — the one you chose when connecting GitHub. It labels your
   usage data in place of the random ID, and is shown publicly on the
   leaderboard described below.
-- The extension version, and which of the two themes you are using
-- Which features you use — which tab you open, which study sheet you select,
-  when you open the tracker, export or import data, or change theme
+- The extension version, which of the two themes you are using, and which
+  README theme your repository is written with
+- Which study sheet you have selected and how far through it you are
+- When you open the tracker, export or import data, or change theme
+
+Deliberately **not** collected: which tab you opened, or that you opened the
+popup at all. Those were most of what used to be stored and answered nothing
+about whether the extension works.
 - **Every submission you make on LeetCode**, not only the accepted ones: the
   problem slug, the verdict (`Accepted`, `Wrong Answer`, `Time Limit
   Exceeded`, and so on), the language, the runtime and memory LeetCode

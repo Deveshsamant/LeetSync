@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Taken from the switch either way: "Not now" answers the reporting
     // question, not this one, and the switch is on screen while it is clicked.
     await Analytics.setPing(wizPingToggle.classList.contains('on'));
-    if (optIn) Analytics.track('session', { detail: 'onboarding_opt_in' });
+    if (optIn) Analytics.track('repo_setup', { detail: 'onboarding_complete' });
     wizGoTo(5);
   }
 
@@ -432,7 +432,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tab === 'dashboard') loadDashboard();
     if (tab === 'battle') loadBattle();
     if (tab === 'sheets') loadSheets();
-    Analytics.track('tab', { detail: tab });
+    // Deliberately not reported: which tab is open says nothing about
+    // whether the extension is working, and it drowned everything else.
   }
 
   tabBtns.forEach(btn => {
@@ -739,6 +740,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   readmeThemeSelect.addEventListener('change', () => {
     chrome.runtime.sendMessage({ type: 'SET_THEME', theme: readmeThemeSelect.value });
+    // Which README theme people settle on decides what every synced repo
+    // looks like, which is worth more than knowing a tab was opened.
+    Analytics.track('readme_theme', { detail: readmeThemeSelect.value });
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -781,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // One per popup open. A change-only 'theme' event can say what people
       // switch to but never what they actually sit on, which is the question
       // worth answering.
-      Analytics.track('session', { theme: applied });
+      // Opening the popup is not a fact worth a row either.
     });
   }
 
@@ -1464,7 +1468,8 @@ document.addEventListener('DOMContentLoaded', () => {
     await Analytics.setEnabled(next);
     paintAnalyticsToggle(next);          // after setEnabled, so the id exists
     // Recorded only when switching on — the off path must send nothing.
-    if (next) Analytics.track('session', { detail: 'analytics_enabled', theme: currentUITheme() });
+    // The theme is worth knowing; that a popup opened is not.
+    if (next) Analytics.track('theme', { detail: currentUITheme(), theme: currentUITheme() });
   });
 
   shareCodeToggle.addEventListener('click', async () => {
@@ -2181,7 +2186,13 @@ document.addEventListener('DOMContentLoaded', () => {
   sheetPicker.addEventListener('change', () => {
     chrome.storage.sync.set({ activeSheet: sheetPicker.value });
     renderSheet(sheetPicker.value);
-    Analytics.track('sheet', { detail: sheetPicker.value });
+    // Carries progress, not just the pick: "which sheet" is half a fact,
+    // "how far through it" is the other half.
+    Analytics.track('sheet', {
+      detail: sheetPicker.value,
+      testsPassed: Number(document.getElementById('sheetDone').textContent) || 0,
+      testsTotal: Number(document.getElementById('sheetTotal').textContent) || 0,
+    });
   });
 
   /**
