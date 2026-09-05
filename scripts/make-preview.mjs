@@ -59,12 +59,43 @@ const stub = `
   const wantTheme = params.get('theme') === 'light' ? 'light' : 'dark';
   const wantTab = params.get('tab');
   const capture = params.get('capture') === '1';
+  // ?screen=setup drops the saved token so the onboarding wizard runs, and
+  // ?step= lands on one of its five screens. popup.js restores wizardStep
+  // itself, so this only has to seed storage.
+  const wantScreen = params.get('screen');
+  const wantStep = Number(params.get('step')) || 2;
+  // ?full=1 lets the popup grow to its natural height instead of scrolling
+  // inside 420x600, so a capture gets the whole screen rather than the top of
+  // it. Nothing here is layout the extension uses -- it only lifts the fixed
+  // height and the clipping that height implies.
+  const full = params.get('full') === '1';
+
+  if (full) {
+    const grow = document.createElement('style');
+    grow.textContent =
+      'html,body{height:auto!important;overflow:visible!important}' +
+      '.popup-container{height:auto!important;overflow:visible!important}' +
+      '.popup-body{overflow:visible!important;min-height:0!important}' +
+      '.tab-content.active{overflow:visible!important;flex:none!important}' +
+      '.wizard-overlay{position:static!important;height:auto!important;' +
+        'min-height:600px!important}' +
+      '.wizard-body{overflow:visible!important}' +
+      // A study sheet is hundreds of rows and the tracker is all 895 problems.
+      // Letting those grow unbounded photographs the dataset, not the screen,
+      // so the generated lists keep a height and read as "continues below".
+      '#sheetList{max-height:760px!important;overflow:hidden!important}' +
+      '.problems-list{max-height:900px!important;overflow:hidden!important}';
+    document.addEventListener('DOMContentLoaded', () => document.head.appendChild(grow));
+  }
 
   if (capture) {
     const kill = document.createElement('style');
     kill.textContent =
       '*,*::before,*::after{animation:none!important;transition:none!important;' +
-      'animation-duration:0s!important;transition-duration:0s!important}';
+      'animation-duration:0s!important;transition-duration:0s!important}' +
+      // Whatever the developer happens to be broadcasting today is live data,
+      // and it lands on top of whichever screen is being photographed.
+      '.modal-overlay,#announceBanner{display:none!important}';
     document.addEventListener('DOMContentLoaded', () => document.head.appendChild(kill));
   }
   const store = {
@@ -134,6 +165,12 @@ const stub = `
     },
     tabs: { create: ({ url }) => window.open(url, '_blank') }
   };
+
+  if (wantScreen === 'setup') {
+    delete store.githubToken;
+    delete store.githubRepo;
+    store.wizardStep = wantStep;
+  }
 
   // Select the requested tab once the popup has wired its own handlers, and
   // flag readiness so a capture waits for paint rather than a fixed delay.
