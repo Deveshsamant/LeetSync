@@ -75,6 +75,12 @@ and filters across all of them.
   Medium 5 / Easy 3, which you join by switching usage reporting on
 • Every verdict recorded, so you can find the problems that took you 4 tries
 
+━━━ TALK TO THE DEVELOPER ━━━
+
+Settings has a box for feedback, an issue or a suggestion. It goes straight to
+the developer, and a reply comes back in the extension itself, quoted next to
+what you wrote — not into an inbox you have to go and check.
+
 ━━━ YOUR TOKEN, YOUR REPO ━━━
 
 Works with a fine-grained GitHub token scoped to a single repository, with
@@ -85,10 +91,12 @@ and sent only to api.github.com. It is never transmitted anywhere else.
 
 Usage reporting is OFF unless you switch it on, and you are asked once during
 setup. Switching it on is also what puts your username and score on the public
-leaderboard; leave it off and you are not ranked. Sharing your solution code is a separate switch that stays off even
-then. One activity ping — a random ID and the version, twice a day at most — is
-on by default, disclosed at setup, and has its own switch. Your GitHub token,
-repository name and GitHub username are never collected. Full policy:
+leaderboard; leave it off and you are not ranked. Sharing your solution code is
+a separate switch that stays off even then. One activity ping — a random ID and
+the version, twice a day at most — is on by default, disclosed at setup, and
+has its own switch. It does not record which tab you opened or that you opened
+the popup. Your GitHub token, repository name and GitHub username are never
+collected. Full policy:
 https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md
 
 Open source: https://github.com/Deveshsamant/LeetSync
