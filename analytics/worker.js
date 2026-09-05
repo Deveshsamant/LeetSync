@@ -745,6 +745,26 @@ export default {
     const int = (name, dflt, lo, hi) =>
       Math.min(Math.max(Number(url.searchParams.get(name)) || dflt, lo), hi);
 
+    // Sending is the one write the dashboard makes, so it carries the key.
+    // It has to be matched before the /api/ read block below, which answers
+    // every other /api/ path and 404s the ones it does not recognise.
+    if (url.pathname === '/api/announcement' && request.method === 'POST') {
+      if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400);
+      }
+      try {
+        return payload && payload.clear === true
+          ? await clearAnnouncements(env)
+          : await sendAnnouncement(env, payload);
+      } catch (error) {
+        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
+      }
+    }
+
     if (url.pathname.startsWith('/api/')) {
       if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
       const days = int('days', 30, 1, 365);
@@ -830,24 +850,6 @@ export default {
 
     // Claiming a name is a client operation, so it sits outside the read API
     // and its key. It is still write-only from the caller's point of view.
-    // Sending is the one write the dashboard makes, so it carries the key.
-    if (url.pathname === '/api/announcement') {
-      if (!authorised(request, env)) return json({ error: 'unauthorised' }, 401);
-      let payload;
-      try {
-        payload = await request.json();
-      } catch {
-        return json({ error: 'invalid json' }, 400);
-      }
-      try {
-        return payload && payload.clear === true
-          ? await clearAnnouncements(env)
-          : await sendAnnouncement(env, payload);
-      } catch (error) {
-        return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
-      }
-    }
-
     if (url.pathname === '/claim-name') {
       let claim;
       try {
