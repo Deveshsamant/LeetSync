@@ -150,7 +150,9 @@ const Analytics = (() => {
   async function announcement() {
     if (!configured()) return null;
     try {
-      const res = await fetch(`${ENDPOINT}/announcement`);
+      // Sends the install id so the server can answer with a reply written to
+      // this person, not only the message everybody is getting.
+      const res = await fetch(`${ENDPOINT}/announcement?installId=${encodeURIComponent(await installId())}`);
       if (!res.ok) return null;
       const body = await res.json();
       return (body && body.announcement) || null;

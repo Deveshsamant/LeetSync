@@ -507,7 +507,14 @@ async function feedbackList(env, limit, openOnly) {
     `SELECT kind, COUNT(*) AS n, SUM(CASE WHEN handled = 0 THEN 1 ELSE 0 END) AS open
      FROM feedback GROUP BY kind`);
 
-  return { rows, counts, generatedAt: Date.now() };
+  // What was said back, so a row reads as a conversation rather than an
+  // inbox entry whose answer lives somewhere else.
+  const replies = await all(env,
+    `SELECT id, feedback_id, message, type, created_at, active
+     FROM announcements WHERE feedback_id IS NOT NULL
+     ORDER BY created_at DESC LIMIT 200`);
+
+  return { rows, counts, replies, generatedAt: Date.now() };
 }
 
 async function markFeedback(env, id, handled) {
@@ -532,11 +539,25 @@ async function markFeedback(env, id, handled) {
 const ANNOUNCE_TYPES = new Set(['info', 'warn', 'success']);
 const MAX_ANNOUNCE = 400;
 
-async function liveAnnouncement(env) {
-  const rows = await all(env,
-    `SELECT id, title, message, type, url, created_at
-     FROM announcements WHERE active = 1
-     ORDER BY created_at DESC, id DESC LIMIT 1`);
+/**
+  * The newest thing this install should see: either a global broadcast or a
+  * reply addressed to it. A reply outranks a broadcast of the same age
+  * because it was written to that person — being answered matters more than
+  * being announced at.
+  */
+async function liveAnnouncement(env, installId) {
+  const rows = installId
+    ? await all(env,
+        `SELECT id, title, message, type, url, created_at, target_install, feedback_id
+         FROM announcements
+         WHERE active = 1 AND (target_install IS NULL OR target_install = ?)
+         ORDER BY (target_install IS NOT NULL) DESC, created_at DESC, id DESC
+         LIMIT 1`, installId)
+    : await all(env,
+        `SELECT id, title, message, type, url, created_at, target_install, feedback_id
+         FROM announcements
+         WHERE active = 1 AND target_install IS NULL
+         ORDER BY created_at DESC, id DESC LIMIT 1`);
   return { announcement: rows[0] || null };
 }
 
@@ -554,17 +575,31 @@ async function sendAnnouncement(env, body) {
   const rawType = str(body && body.type, 20);
   const type = ANNOUNCE_TYPES.has(rawType) ? rawType : 'info';
 
+  const target = str(body && body.targetInstall, 64);
+  const feedbackId = Number.isFinite(Number(body && body.feedbackId))
+    ? Math.floor(Number(body.feedbackId)) : null;
+
   const now = Date.now();
+  // Only the same audience is replaced. A reply to one person must not take
+  // down what everybody is being shown, and vice versa.
+  const supersede = target
+    ? env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1 AND target_install = ?')
+        .bind(target)
+    : env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1 AND target_install IS NULL');
+
   await env.DB.batch([
-    env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1'),
-    env.DB.prepare(`INSERT INTO announcements (title, message, type, url, created_at, active)
-                    VALUES (?, ?, ?, ?, ?, 1)`).bind(title, message, type, url, now),
+    supersede,
+    env.DB.prepare(`INSERT INTO announcements
+                      (title, message, type, url, created_at, active, target_install, feedback_id)
+                    VALUES (?, ?, ?, ?, ?, 1, ?, ?)`)
+      .bind(title, message, type, url, now, target, feedbackId),
   ]);
-  return json(await liveAnnouncement(env));
+  return json(await liveAnnouncement(env, target));
 }
 
 async function clearAnnouncements(env) {
-  await env.DB.prepare('UPDATE announcements SET active = 0 WHERE active = 1').run();
+  await env.DB.prepare(
+    'UPDATE announcements SET active = 0 WHERE active = 1 AND target_install IS NULL').run();
   return json({ announcement: null, cleared: true });
 }
 
@@ -572,7 +607,8 @@ async function clearAnnouncements(env) {
 async function announcementHistory(env, limit) {
   return {
     rows: await all(env,
-      `SELECT id, title, message, type, url, created_at, active
+      `SELECT id, title, message, type, url, created_at, active,
+              target_install, feedback_id
        FROM announcements ORDER BY created_at DESC, id DESC LIMIT ?`, limit),
   };
 }
@@ -931,7 +967,7 @@ export default {
     // broadcast. One row, and nothing about who has read it.
     if (url.pathname === '/announcement') {
       try {
-        return json(await liveAnnouncement(env));
+        return json(await liveAnnouncement(env, str(url.searchParams.get('installId'), 64)));
       } catch (error) {
         return json({ error: 'server', detail: String(error).slice(0, 200) }, 500);
       }
