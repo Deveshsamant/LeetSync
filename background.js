@@ -10,7 +10,7 @@
 // Pure README/SVG generation lives in readme.js (unit tested in test/).
 // importScripts runs synchronously and shares this global scope, so the
 // generators are available to every function below.
-importScripts('readme.js', 'analytics.js');
+importScripts('readme.js', 'analytics.js', 'sheet-progress.js', 'device-sync.js');
 
 // ── Base64 Encoding (Unicode-safe) ───────────────────────────
 
@@ -657,6 +657,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Merge this device with whatever the repo holds, in both directions.
+  if (message.type === 'SYNC_DEVICES') {
+    syncDevices({ write: message.write !== false })
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === 'LOGOUT') {
+    logout()
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === 'GET_SYNC_STATUS') {
+    chrome.storage.local.get([LAST_SYNC_KEY], (data) => {
+      sendResponse({ lastSync: data[LAST_SYNC_KEY] || null });
+    });
+    return true;
+  }
+
   // Return list of all synced problems
   if (message.type === 'GET_PROBLEMS') {
     chrome.storage.local.get(['solvedProblems'], (data) => {
@@ -866,7 +888,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /**
  * Delete a problem folder from GitHub and update local storage + README.
  */
+/** Wrapped so every delete path records a tombstone, not just the UI one. */
 async function deleteProblemFromGitHub(problemNumber, folderName) {
+  const result = await deleteProblemFiles(problemNumber, folderName);
+  await recordRemoval('problems', String(problemNumber));
+  return result;
+}
+
+async function deleteProblemFiles(problemNumber, folderName) {
   const settings = await chrome.storage.sync.get(['githubRepo']);
   const repo = settings.githubRepo;
 
@@ -1590,6 +1619,196 @@ async function syncStatsFromGitHub(repo) {
   return { success: true, solvedCount, pushCount, currentStreak, longestStreak, heatmapDays: solveHistory.length };
 }
 
+// ══════════════════════════════════════════════════════════════
+// ── Cross-device sync ────────────────────────────────────────
+//
+// The repository is the only thing two machines provably share, so the merged
+// progress lives there as .leetsync/state.json rather than in
+// chrome.storage.sync — which only reaches a second machine when both are
+// signed into the same Chrome profile, and never survives a reinstall.
+//
+// DeviceSync.merge is commutative and idempotent, so neither machine needs to
+// know the other exists: each merges what it finds with what it has and
+// writes the result back.
+// ══════════════════════════════════════════════════════════════
+
+const DEVICE_ID_KEY = 'leetsyncDeviceId';
+const LAST_SYNC_KEY = 'leetsyncLastSync';
+// The tick set as of the last merge. Unticking removes a key locally, and
+// without a record of what was there before, the merge cannot tell "never
+// ticked here" from "deliberately unticked" and the other machine ticks it
+// straight back.
+const SYNCED_SHEETS_KEY = 'leetsyncSyncedSheets';
+
+async function deviceId() {
+  const data = await chrome.storage.local.get([DEVICE_ID_KEY]);
+  if (data[DEVICE_ID_KEY]) return data[DEVICE_ID_KEY];
+  const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+  await chrome.storage.local.set({ [DEVICE_ID_KEY]: id });
+  return id;
+}
+
+async function readSharedState(repo) {
+  const file = await getFile(repo, DeviceSync.PATH);
+  if (!file || !file.content) return { state: DeviceSync.empty(), sha: file ? file.sha : null };
+  try {
+    return { state: JSON.parse(base64ToUnicode(file.content)), sha: file.sha };
+  } catch {
+    // A corrupt state file must not brick syncing: treat it as empty and let
+    // this device's own history rebuild it on the write below.
+    console.warn('[LeetSync] state.json is not valid JSON; rebuilding it');
+    return { state: DeviceSync.empty(), sha: file.sha };
+  }
+}
+
+/** Everything this device knows, in the shared document's shape. */
+async function localSnapshot() {
+  const [local, ticks, baseline] = await Promise.all([
+    chrome.storage.local.get(['solvedProblems', 'streakData', 'achievements', 'pushCount']),
+    SheetProgress.load(),
+    chrome.storage.local.get([SYNCED_SHEETS_KEY]),
+  ]);
+
+  const state = DeviceSync.snapshot({
+    solvedProblems: local.solvedProblems,
+    streakData: local.streakData,
+    achievements: local.achievements,
+    pushCount: local.pushCount,
+    sheetTicks: [...ticks],
+    deviceId: await deviceId(),
+  });
+
+  const now = Date.now();
+  const current = new Set(ticks);
+  for (const key of (baseline[SYNCED_SHEETS_KEY] || [])) {
+    if (!current.has(key)) state.sheets[key] = { at: now, done: false };
+  }
+  return state;
+}
+
+async function writeLocalState(merged) {
+  const applied = DeviceSync.apply(merged);
+  await chrome.storage.local.set({
+    solvedProblems: applied.solvedProblems,
+    achievements: applied.achievements,
+    pushCount: applied.pushCount,
+    streakData: applied.streakData,
+  });
+  await SheetProgress.save(new Set(applied.sheetTicks));
+  await chrome.storage.local.set({ [SYNCED_SHEETS_KEY]: applied.sheetTicks });
+  return applied;
+}
+
+function syncCounts(applied) {
+  return {
+    problems: Object.keys(applied.solvedProblems).length,
+    achievements: Object.keys(applied.achievements).length,
+    sheetTicks: applied.sheetTicks.length,
+    streak: applied.streakData.currentStreak,
+    days: applied.streakData.solveHistory.length,
+  };
+}
+
+async function writeSharedState(repo, state, sha) {
+  const body = {
+    message: 'LeetSync: sync device state',
+    content: unicodeToBase64(JSON.stringify(state, null, 2)),
+  };
+  if (sha) body.sha = sha;
+  return githubAPI('/repos/' + repo + '/contents/' + DeviceSync.PATH, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Pull, merge, apply, push.
+ *
+ * The write deliberately does not go through putFile: that resolves a SHA
+ * conflict by re-sending the same body, which would overwrite whatever the
+ * other machine had just written. A conflict here means the document moved
+ * under us, so the only safe response is to read it again and merge again —
+ * which terminates because merging is idempotent.
+ */
+async function syncDevices({ write = true } = {}) {
+  const settings = await chrome.storage.sync.get(['githubRepo', 'githubToken']);
+  if (!settings.githubRepo || !settings.githubToken) {
+    return { success: false, error: 'Connect GitHub first' };
+  }
+
+  const mine = await localSnapshot();
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { state: remote, sha } = await readSharedState(settings.githubRepo);
+    const merged = DeviceSync.merge(mine, remote);
+    merged.updatedAt = Date.now();
+
+    if (!write) {
+      return { success: true, pushed: false, ...syncCounts(await writeLocalState(merged)) };
+    }
+
+    try {
+      await writeSharedState(settings.githubRepo, merged, sha);
+    } catch (error) {
+      const conflict = error.message.includes('409') || error.message.includes('422');
+      if (conflict && attempt < 3) continue;   // the other machine wrote; merge again
+      // The local half still counts: better a device that is up to date but
+      // has not published than one that throws away what it just read.
+      await writeLocalState(merged);
+      throw error;
+    }
+
+    const applied = await writeLocalState(merged);
+    await chrome.storage.local.set({ [LAST_SYNC_KEY]: Date.now() });
+    return { success: true, pushed: true, ...syncCounts(applied) };
+  }
+  return { success: false, error: 'Could not settle with the other device; try again' };
+}
+
+/**
+ * Record a removal in the shared document so the other machine does not send
+ * it straight back. Best effort: a failure here costs a resurrected row, not
+ * the delete itself, which has already happened locally.
+ */
+async function recordRemoval(field, key) {
+  try {
+    const settings = await chrome.storage.sync.get(['githubRepo', 'githubToken']);
+    if (!settings.githubRepo || !settings.githubToken) return;
+    const { state, sha } = await readSharedState(settings.githubRepo);
+    await writeSharedState(settings.githubRepo, DeviceSync.tombstone(state, field, key), sha);
+  } catch (error) {
+    console.warn('[LeetSync] Could not record the removal for other devices:', error.message);
+  }
+}
+
+/**
+ * Sign out. The shared state is published first: signing out is exactly when
+ * a person expects their progress to be safe, and clearing before publishing
+ * would lose whatever this device had that the repo did not.
+ *
+ * The device id, theme and usage preferences are not progress and stay, so
+ * signing back in does not look like a brand new install.
+ */
+async function logout() {
+  let published = false;
+  let warning = null;
+  try {
+    const result = await syncDevices({ write: true });
+    published = result.success === true;
+    if (!published) warning = result.error;
+  } catch (error) {
+    warning = error.message;
+  }
+
+  await new Promise(r => chrome.storage.sync.remove(['githubToken', 'githubRepo'], r));
+  await new Promise(r => chrome.storage.local.remove(
+    ['solvedProblems', 'streakData', 'achievements', 'pushCount', 'lastPush',
+     LAST_SYNC_KEY, SYNCED_SHEETS_KEY], r));
+  await SheetProgress.save(new Set());
+
+  return { success: true, published, warning };
+}
+
 // ── Auto Re-injection on Extension Load ──────────────────────
 // When the extension is installed, updated, or reloaded, the old
 // content scripts in already-open LeetCode tabs become invalid.
@@ -1657,6 +1876,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('processQueue', { periodInMinutes: 5 });
   chrome.alarms.create('streakReminder', { periodInMinutes: 60 });
   chrome.alarms.create('flushAnalytics', { periodInMinutes: 30 });
+  chrome.alarms.create('syncDevices', { periodInMinutes: 15 });
 
   // No-ops unless the user has opted in.
   report(details.reason === 'update' ? 'update' : 'install');
@@ -1671,6 +1891,13 @@ reinjectIntoLeetCodeTabs();
 chrome.alarms.get('flushAnalytics', (existing) => {
   if (!existing) chrome.alarms.create('flushAnalytics', { periodInMinutes: 30 });
 });
+chrome.alarms.get('syncDevices', (existing) => {
+  if (!existing) chrome.alarms.create('syncDevices', { periodInMinutes: 15 });
+});
+
+// Catch up as soon as the worker wakes, so opening the popup on the second
+// machine shows the first machine's progress rather than yesterday's.
+syncDevices().catch(() => {});
 
 // ── Alarm Handler ────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -1679,6 +1906,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === 'streakReminder') {
     checkStreakReminder();
+  }
+  if (alarm.name === 'syncDevices') {
+    // Quiet by design: a second machine should catch up without being asked,
+    // and a failure here is not worth interrupting anyone over.
+    syncDevices().catch(e => console.warn('[LeetSync] Device sync failed:', e.message));
   }
   if (alarm.name === 'flushAnalytics') {
     Analytics.flush().catch(() => {});

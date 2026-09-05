@@ -1513,6 +1513,93 @@ document.addEventListener('DOMContentLoaded', () => {
   const LOCAL_KEYS = ['solvedProblems', 'streakData', 'achievements', 'pushCount', 'lastPush'];
   const SYNC_KEYS = ['githubRepo', 'uiTheme', 'readmeTheme', 'activeSheet', 'friends'];
 
+  // ═══════════════════════════════════════════════════════════
+  // DEVICES
+  //
+  // The merge itself lives in the service worker; this only asks for it and
+  // reports what came back.
+  // ═══════════════════════════════════════════════════════════
+  const syncBtn = document.getElementById('syncDevicesBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  function showSyncMessage(text, type = 'info') {
+    const el = document.getElementById('syncMessage');
+    el.textContent = text;
+    el.className = 'status-message status-' + type;
+    el.style.display = 'block';
+  }
+
+  function paintLastSynced(ts) {
+    const el = document.getElementById('lastSyncedAt');
+    if (!ts) { el.textContent = 'never'; return; }
+    const mins = Math.round((Date.now() - ts) / 60000);
+    el.textContent = mins < 1 ? 'just now'
+      : mins < 60 ? mins + 'm ago'
+        : mins < 1440 ? Math.round(mins / 60) + 'h ago'
+          : new Date(ts).toLocaleDateString();
+  }
+
+  chrome.runtime.sendMessage({ type: 'GET_SYNC_STATUS' }, (res) => {
+    if (!chrome.runtime.lastError && res) paintLastSynced(res.lastSync);
+  });
+
+  syncBtn.addEventListener('click', () => {
+    syncBtn.disabled = true;
+    const label = syncBtn.textContent;
+    syncBtn.textContent = 'Syncing…';
+    chrome.runtime.sendMessage({ type: 'SYNC_DEVICES' }, (res) => {
+      syncBtn.disabled = false;
+      syncBtn.textContent = label;
+      if (chrome.runtime.lastError || !res) {
+        showSyncMessage('Could not reach the extension. Try reopening it.', 'error');
+        return;
+      }
+      if (!res.success) {
+        showSyncMessage(res.error || 'Sync failed.', 'error');
+        return;
+      }
+      paintLastSynced(Date.now());
+      const n = (v) => (typeof v === 'number' ? v : 0);
+      showSyncMessage(
+        `Synced — ${n(res.problems)} problems, ${n(res.days)} active days, `
+        + `${n(res.streak)}-day streak.`, 'success');
+      loadDashboard();
+    });
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    // Two clicks, because this clears the token and this machine's progress.
+    if (logoutBtn.dataset.confirm !== '1') {
+      logoutBtn.dataset.confirm = '1';
+      logoutBtn.textContent = 'Sign out?';
+      showSyncMessage('This publishes your progress, then clears it here. Click again to confirm.', 'info');
+      setTimeout(() => {
+        logoutBtn.dataset.confirm = '';
+        logoutBtn.textContent = 'Sign out';
+      }, 5000);
+      return;
+    }
+    logoutBtn.dataset.confirm = '';
+    logoutBtn.disabled = true;
+    logoutBtn.textContent = 'Signing out…';
+    chrome.runtime.sendMessage({ type: 'LOGOUT' }, (res) => {
+      logoutBtn.disabled = false;
+      logoutBtn.textContent = 'Sign out';
+      if (chrome.runtime.lastError || !res || !res.success) {
+        showSyncMessage('Could not sign out. Try again.', 'error');
+        return;
+      }
+      // Said plainly rather than hidden: whether the progress reached the repo
+      // decides whether signing back in restores it.
+      if (!res.published) {
+        showSyncMessage(
+          'Signed out, but your progress could not be published first' +
+          (res.warning ? ` (${res.warning})` : '') + '.', 'error');
+      }
+      setTimeout(() => window.location.reload(), res.published ? 400 : 2500);
+    });
+  });
+
   function showDataMessage(text, type = 'info') {
     const el = document.getElementById('dataMessage');
     el.textContent = text;

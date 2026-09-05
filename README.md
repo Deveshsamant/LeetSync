@@ -47,6 +47,27 @@ LeetSync is a Chrome extension that watches for your LeetCode submissions in the
 
 ---
 
+## 💻 Two computers, one account
+
+Sign in on a second machine with the same token and repository and it catches
+up on its own — same solved problems, same streak, same achievements, same
+sheet ticks. Solving on either one keeps a single streak: a Monday on the
+laptop and a Tuesday on the desktop is a two-day streak, not two one-day ones.
+
+The merged state lives in your own repo at `.leetsync/state.json`, because the
+repository is the only thing the two machines provably share.
+`chrome.storage.sync` would only reach a second machine when both are signed
+into the same Chrome profile, and it does not survive a reinstall.
+
+Merging is commutative and idempotent, so neither machine needs to know the
+other exists and the order they sync in cannot change the result. Removals are
+recorded rather than dropped — otherwise deleting a problem or unticking a
+sheet row on one machine would simply be undone by the other on the next sync.
+
+**Sign out** (Settings → Devices) publishes your progress first, then clears
+this computer's copy along with the token. Signing back in with the same token
+and repo brings it all back.
+
 ## 📁 Generated Repo Structure
 
 ```

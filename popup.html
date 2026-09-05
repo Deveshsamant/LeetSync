@@ -600,6 +600,30 @@
           <div id="dataMessage" class="status-message status-info" style="display:none;margin-top:10px;"></div>
         </div>
 
+        <!-- Devices -->
+        <div class="card">
+          <div class="sec-label" style="margin-bottom:10px;">DEVICES</div>
+          <div class="form-hint" style="margin-bottom:10px;">
+            Your progress is merged through your repository, so a second
+            computer signed in with the same token and repo catches up on its
+            own. Solving on either one keeps a single streak.
+          </div>
+          <div class="about-row">
+            <span>Last synced</span>
+            <span id="lastSyncedAt" class="about-version">never</span>
+          </div>
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="btn btn-secondary" id="syncDevicesBtn">Sync now</button>
+            <button class="btn btn-ghost" id="logoutBtn">Sign out</button>
+          </div>
+          <div id="syncMessage" class="status-message status-info" style="display:none;margin-top:10px;"></div>
+          <div class="form-hint" style="margin-top:10px;">
+            Signing out publishes your progress first, then clears this
+            computer's copy along with the token. Sign back in with the same
+            token and repo and it all comes back.
+          </div>
+        </div>
+
         <!-- About -->
         <div class="card">
           <div class="sec-label" style="margin-bottom:10px;">ABOUT</div>

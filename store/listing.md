@@ -43,6 +43,13 @@ LeetSync automatically pushes every accepted LeetCode solution to your own GitHu
 • Keeps a root index with difficulty badges, language mix and a solve calendar
 • Queues and retries pushes that fail, so a dropped connection loses nothing
 
+━━━ TWO COMPUTERS, ONE ACCOUNT ━━━
+
+Sign in on a second machine with the same token and repo and it catches up by
+itself — same solved problems, same streak, same achievements, same sheet
+ticks. Solving on either keeps a single streak. Sign out publishes your
+progress first, so signing back in restores it.
+
 ━━━ STUDY SHEETS ━━━
 
 Seven sheets ship with the extension — 1,667 rows, 895 unique problems:

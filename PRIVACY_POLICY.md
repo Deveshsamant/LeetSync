@@ -13,6 +13,18 @@ the extension version, at most twice a day, and nothing else. It is on by
 default, it is disclosed when you set the extension up, and it has its own
 switch in Settings. Turn it off and nothing leaves your browser at all.
 
+## Data stored in your repository
+
+Alongside your solutions, LeetSync keeps a `.leetsync/state.json` file in the
+repository you connected. It holds the progress that is shared between your own
+computers: which problems you have solved, the days you solved on, unlocked
+achievements and study-sheet ticks.
+
+It is written with your own token to your own repository. It contains no token,
+no email, and no GitHub username, and it is never sent anywhere else — the
+extension reads and writes it directly against `api.github.com`. If the
+repository is private, so is the file.
+
 ## Data stored on your device
 
 Held locally using Chrome's storage API and never transmitted anywhere except

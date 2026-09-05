@@ -11,7 +11,7 @@
  * finds one — "Could not load manifest" — which is a confusing way to discover
  * that a dev-only preview file exists. test/wiring.test.js enforces this.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, statSync } from 'node:fs';
 
 // Read from the manifest rather than hardcoded, so the preview cannot drift
 // from the real version — a stale one made the update banner appear against
@@ -88,7 +88,11 @@ const stub = `
     GET_THEME:        { theme: wantTheme },
     GET_SOLUTIONS:    { success: true, solutions: [] },
     ENSURE_REPO:      { success: true, created: false, fullName: 'Deveshsamant/leetcode-solutions',
-                        url: 'https://github.com/Deveshsamant/leetcode-solutions', private: false }
+                        url: 'https://github.com/Deveshsamant/leetcode-solutions', private: false },
+    GET_SYNC_STATUS:  { lastSync: Date.now() - 9 * 60000 },
+    SYNC_DEVICES:     { success: true, pushed: true, problems: solved.length,
+                        achievements: 7, sheetTicks: 8, streak: 3, days: 14 },
+    LOGOUT:           { success: true, published: true }
   };
   window.chrome = {
     runtime: {
@@ -149,12 +153,30 @@ const stub = `
 </script>
 `;
 
+/**
+ * Stamp every local script and stylesheet with the file's own mtime.
+ *
+ * Without this the preview is served over plain HTTP with no cache headers,
+ * so a browser keeps the previous popup.js and popup.css for the rest of the
+ * session — the page renders old code against new markup and looks like a
+ * bug in the change you just made. The stamp only moves when the file does.
+ */
+function bust(html) {
+  return html.replace(/(src|href)="([^"?:]+\.(?:js|css))"/g, (whole, attr, file) => {
+    try {
+      return `${attr}="${file}?v=${Math.floor(statSync(file).mtimeMs)}"`;
+    } catch {
+      return whole;                      // not a file we ship; leave it alone
+    }
+  });
+}
+
 function build(source, scriptTag, out) {
   const html = readFileSync(source, 'utf8');
   if (!html.includes(scriptTag)) {
     throw new Error(`${source} no longer loads its script the expected way`);
   }
-  writeFileSync(out, html.replace(scriptTag, stub + scriptTag));
+  writeFileSync(out, bust(html.replace(scriptTag, stub + scriptTag)));
   console.log(`Wrote ${out}`);
 }
 
