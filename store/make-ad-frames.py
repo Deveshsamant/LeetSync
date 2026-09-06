@@ -195,6 +195,91 @@ def palette(t):
     return im
 
 
+# ── One frame per screen ─────────────────────────────────────
+
+# Every screen the extension has, including the two the popup's own tab bar
+# cannot reach. The label is what the frame is called; the query is how the
+# preview is asked for it.
+SCREENS = [
+    ('setup',     'screen=setup&step=2'),
+    ('consent',   'screen=setup&step=4'),
+    ('dashboard', 'tab=dashboard'),
+    ('solved',    'tab=problems'),
+    ('sheets',    'tab=sheets'),
+    ('battle',    'tab=battle'),
+    ('settings',  'tab=settings'),
+]
+
+# The popup sits 616px wide in a 1920 frame, which is about 1.47x its real
+# size -- comfortably readable at 1080p. That fixes how much of a screen a
+# frame can hold, and Settings is 2,193 CSS px tall, so a screen that does not
+# fit becomes several frames rather than one unreadable one. Shrinking to fit
+# is the wrong trade for video: a frame nobody can read shows no features at
+# all.
+ART_W = 616
+ART_H = 900
+MAX_SLICES = 3
+OVERLAP = 60        # source px repeated between slices, so nothing falls between
+
+
+def slices(shot_im):
+    """Cut a whole-screen capture into frame-height pieces, top first."""
+    sw, sh = shot_im.size
+    step = int(ART_H / (ART_W / sw))          # source px shown by one frame
+    out, top = [], 0
+    while top < sh and len(out) < MAX_SLICES:
+        bottom = min(sh, top + step)
+        # A last sliver is padded up rather than shown short, so every frame
+        # in the set has the same composition.
+        if bottom - top < step and len(out):
+            top = max(0, bottom - step)
+        out.append(shot_im.crop((0, top, sw, min(sh, top + step))))
+        if bottom >= sh:
+            break
+        top = bottom - OVERLAP
+    return out
+
+
+def screen_frames(theme_name):
+    """A readable frame for every screen, in one theme."""
+    t = THEMES[theme_name]
+    th = PREVIEW_THEME[theme_name]
+    made = []
+
+    for label, query in SCREENS:
+        shot_im = shot('preview-popup.html?capture=1&full=1&theme=%s&%s' % (th, query),
+                       'screen-%s.png' % label, 420, 3000)
+        shot_im = trim_tail(shot_im)
+        parts = slices(shot_im)
+        for i, part in enumerate(parts, 1):
+            suffix = '' if len(parts) == 1 else '-%d' % i
+            frame = place(ground(1920, 1080, t, glow_at=(0.74, 0.3)),
+                          part, ART_H, t, centre=(1180, 540))
+            made.append(('screen-%s%s-16x9-%s.png' % (label, suffix, theme_name), frame))
+
+    tracker = shot('preview-tracker.html?capture=1&theme=%s' % th,
+                   'screen-tracker.png', 1280, 900)
+    top = tracker.crop((0, 0, tracker.size[0], int(tracker.size[0] * 9 / 16)))
+    made.append(('screen-tracker-16x9-%s.png' % theme_name,
+                 place(ground(1920, 1080, t, glow_at=(0.5, 0.2)), top, 980, t)))
+    return made
+
+
+def trim_tail(im):
+    """Drop the empty ground below a full-height capture.
+
+    The capture window is deliberately over-tall because Chrome cannot report
+    how tall the page turned out, so every screen ends in a band of nothing.
+    """
+    w, h = im.size
+    px = im.load()
+    bg = px[1, h - 2]
+    last = h - 1
+    while last > 400 and all(px[x, last] == bg for x in range(0, w, 7)):
+        last -= 1
+    return im.crop((0, 0, w, min(h, last + 24)))
+
+
 # ── Build ────────────────────────────────────────────────────
 
 def main():
@@ -226,6 +311,11 @@ def main():
         written.append(('frame-tracker-16x9-%s.png' % name, f))
 
         written.append(('frame-palette-%s.png' % name, palette(t)))
+
+    # Modernist only: the per-screen set is a light-ground storyboard, and
+    # doubling it in Signal would be sixteen more files nobody asked for.
+    print('modernist --- one frame per screen')
+    written.extend(screen_frames('modernist'))
 
     os.makedirs(OUT, exist_ok=True)
     for fname, im in written:
