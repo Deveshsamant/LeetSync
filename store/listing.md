@@ -4,6 +4,23 @@ Everything below is written to be pasted straight into the dashboard fields.
 Keep this file in step with `manifest.json`; a listing that disagrees with the
 package is the most common cause of a rejection.
 
+## Rejected once — do not undo this
+
+Version 2.0.0 was rejected on 6 September 2026 for **keyword spam** (reference
+*Yellow Argon*). The cited text was the study sheets, listed as seven bullets
+of brand name plus problem count:
+
+> Striver's A2Z DSA Sheet (474) • Love Babbar 450 DSA Sheet (448) • NeetCode
+> 250 (250) • …
+
+The feature is real, but that formatting is indistinguishable from a keyword
+block: seven proper nouns and seven numbers, no sentence around them. It now
+reads as prose that names three of the sheets in passing.
+
+**Do not put the sheets back as a list, and do not add per-sheet counts.** The
+same clause covers formatting, so the heavy rule characters that used to sit
+around each heading are gone too.
+
 ---
 
 ## Title (from package — edit `manifest.json` `name`)
@@ -34,7 +51,7 @@ Everything that matters is in them.
 ```
 LeetSync automatically pushes every accepted LeetCode solution to your own GitHub repository — the code, a README per problem, and an index that keeps itself up to date. Solve, submit, and it is committed. No copy-pasting, ever.
 
-━━━ WHAT IT DOES ━━━
+WHAT IT DOES
 
 • Detects accepted submissions on leetcode.com and pushes them in seconds
 • Files each solution by problem number, with the right language extension
@@ -43,30 +60,22 @@ LeetSync automatically pushes every accepted LeetCode solution to your own GitHu
 • Keeps a root index with difficulty badges, language mix and a solve calendar
 • Queues and retries pushes that fail, so a dropped connection loses nothing
 
-━━━ TWO COMPUTERS, ONE ACCOUNT ━━━
+TWO COMPUTERS, ONE ACCOUNT
 
 Sign in on a second machine with the same token and repo and it catches up by
 itself — same solved problems, same streak, same achievements, same sheet
 ticks. Solving on either keeps a single streak. Sign out publishes your
 progress first, so signing back in restores it.
 
-━━━ STUDY SHEETS ━━━
+STUDY SHEETS
 
-Seven sheets ship with the extension — 1,667 rows, 895 unique problems:
+Seven of the DSA sheets people actually work through are built in, covering 895
+unique problems between them — the Striver collections, both NeetCode lists and
+Love Babbar's 450 among them. Solving a problem ticks it off in every sheet it
+appears in. Anything that is not a LeetCode problem you can tick by hand, and a
+full-page tracker gives you search and filters across all of them.
 
-• Striver's A2Z DSA Sheet (474)
-• Love Babbar 450 DSA Sheet (448)
-• NeetCode 250 (250)
-• Striver's SDE Sheet (191)
-• NeetCode 150 (150)
-• Striver's 79 Sheet (79)
-• Striver's Blind 75 (75)
-
-Solving a problem ticks it in every sheet it appears in. Anything that is not
-a LeetCode problem you can tick by hand. A full-page tracker gives you search
-and filters across all of them.
-
-━━━ KEEPS YOU GOING ━━━
+KEEPS YOU GOING
 
 • Daily streak counter and a 90-day activity calendar
 • Achievements that unlock as you go
@@ -75,19 +84,19 @@ and filters across all of them.
   Medium 5 / Easy 3, which you join by switching usage reporting on
 • Every verdict recorded, so you can find the problems that took you 4 tries
 
-━━━ TALK TO THE DEVELOPER ━━━
+TALK TO THE DEVELOPER
 
 Settings has a box for feedback, an issue or a suggestion. It goes straight to
 the developer, and a reply comes back in the extension itself, quoted next to
 what you wrote — not into an inbox you have to go and check.
 
-━━━ YOUR TOKEN, YOUR REPO ━━━
+YOUR TOKEN, YOUR REPO
 
 Works with a fine-grained GitHub token scoped to a single repository, with
 Contents: read and write and nothing else. The token is held in Chrome storage
 and sent only to api.github.com. It is never transmitted anywhere else.
 
-━━━ PRIVACY ━━━
+PRIVACY
 
 Usage reporting is OFF unless you switch it on, and you are asked once during
 setup. Switching it on is also what puts your username and score on the public
