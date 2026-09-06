@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Streak
   const streakCount = document.getElementById('streakCount');
   const streakBest  = document.getElementById('streakBest');
+  const streakItem  = document.getElementById('streakItem');
 
   // Difficulty
   const diffEasyBar = document.getElementById('diffEasyBar');
@@ -530,6 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (chrome.runtime.lastError || !data) return;
       animateCounter(streakCount, data.currentStreak || 0, 600);
       streakBest.textContent = data.longestStreak || 0;
+      // The tile only lights up while there is a run to light up for.
+      if (streakItem) streakItem.classList.toggle('cold', !(data.currentStreak > 0));
     });
   }
 

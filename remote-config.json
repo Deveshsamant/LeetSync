@@ -1,5 +1,5 @@
 {
-  "latestVersion": "2.0.0",
+  "latestVersion": "2.0.1",
   "maintenance": {
     "active": false,
     "message": "We're upgrading LeetSync! Be right back.",
@@ -11,22 +11,6 @@
     "type": "info"
   },
   "changelog": {
-    "2.0.0": [
-      "Every submission is now recorded, not just the accepted ones — filter Solved by what took you several tries, or what you have not revisited",
-      "Write notes on any problem; they go into that problem's page in your repo",
-      "Pick a username when you connect GitHub, unique across LeetSync",
-      "README index collapses into per-difficulty sections once it outgrows a flat table, so a large repo stays readable",
-      "README gains a rolling-year solve calendar, and difficulty badges now show progress against LeetCode's real totals",
-      "Usage reporting is asked once during setup instead of hiding in Settings, and still starts off",
-      "Sharing your solution code is a separate switch that stays off even when reporting is on",
-      "An activity ping, on by default and with its own switch: a random ID and the version, twice a day at most, so a dormant install is not mistaken for one that declined reporting — nothing else is sent",
-      "Use LeetSync on two computers: sign in with the same token and repo and your solved problems, streak, achievements and sheet ticks merge through your own repository — and there is now a Sign out button",
-      "A public leaderboard in the Battle tab — all time, this week and today, plus your own position. Hard 10, Medium 5, Easy 3, counted once per problem. Turn on usage reporting to be ranked",
-      "Fixed: the weekly challenge bar showed a number next to an empty bar",
-      "Fixed: runtime and memory were always blank on synced solutions",
-      "Fixed: release notes could silently fail to appear after an update",
-      "Send feedback, an issue or a suggestion from Settings — and get an answer back inside the extension, quoting what you wrote"
-    ],
     "1.6.0": [
       "Sheet ticks now sync across devices and survive a reinstall",
       "New All sheets view — 895 unique problems across the seven sheets",
@@ -76,6 +60,23 @@
       "🔥 Daily streak counter",
       "📡 Offline queue for failed pushes",
       "📝 5 README themes for your GitHub repo"
+    ],
+    "2.0.1": [
+      "Every submission is now recorded, not just the accepted ones — filter Solved by what took you several tries, or what you have not revisited",
+      "Write notes on any problem; they go into that problem's page in your repo",
+      "Pick a username when you connect GitHub, unique across LeetSync",
+      "README index collapses into per-difficulty sections once it outgrows a flat table, so a large repo stays readable",
+      "README gains a rolling-year solve calendar, and difficulty badges now show progress against LeetCode's real totals",
+      "Usage reporting is asked once during setup instead of hiding in Settings, and still starts off",
+      "Sharing your solution code is a separate switch that stays off even when reporting is on",
+      "An activity ping, on by default and with its own switch: a random ID and the version, twice a day at most, so a dormant install is not mistaken for one that declined reporting — nothing else is sent",
+      "Use LeetSync on two computers: sign in with the same token and repo and your solved problems, streak, achievements and sheet ticks merge through your own repository — and there is now a Sign out button",
+      "A public leaderboard in the Battle tab — all time, this week and today, plus your own position. Hard 10, Medium 5, Easy 3, counted once per problem. Turn on usage reporting to be ranked",
+      "Fixed: the weekly challenge bar showed a number next to an empty bar",
+      "Fixed: runtime and memory were always blank on synced solutions",
+      "Fixed: release notes could silently fail to appear after an update",
+      "Send feedback, an issue or a suggestion from Settings — and get an answer back inside the extension, quoting what you wrote",
+      "The day streak now has its own tile and a flame, lit only while the run is alive"
     ]
   }
 }

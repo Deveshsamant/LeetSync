@@ -399,6 +399,44 @@ body.theme-light .stat-value { font-size: 28px; font-weight: 800; line-height: 1
 body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 5px; }
 
 .stat-sub { font-size: 10.5px; color: var(--tx-4); margin-top: 5px; }
+
+/* The streak is the number people open the popup to check, and it sat in the
+   row looking exactly like the other two. Its own ground, and a flame that
+   only burns while the run is alive. */
+.stat-streak { background: var(--streak-bg); box-shadow: inset 0 0 0 1px var(--streak-bd); }
+.stat-streak .stat-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--streak-tx);
+}
+.stat-streak .stat-label { color: var(--streak-tx); opacity: .8; }
+.streak-flame {
+  width: 15px;
+  height: 16px;
+  flex: none;
+  transform-origin: 50% 85%;
+  animation: lsFlicker 2.6s ease-in-out infinite;
+}
+body.theme-light .streak-flame { width: 17px; height: 18px; }
+
+/* A streak of zero is not on fire: the tile drops back into the row and the
+   flame goes cold, so the highlight means something when it is there. */
+.stat-streak.cold {
+  background: transparent;
+  box-shadow: none;
+}
+.stat-streak.cold .stat-value { color: var(--tx); }
+.stat-streak.cold .stat-label { color: var(--tx-4); opacity: 1; }
+.stat-streak.cold .streak-flame { color: var(--tx-5); animation: none; }
+
+/* Small, slow and off-centre — a flame that pulses on the beat reads as a
+   loading spinner. */
+@keyframes lsFlicker {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  35%      { transform: scale(1.07) rotate(-2deg); opacity: .92; }
+  70%      { transform: scale(.97) rotate(1.5deg); opacity: 1; }
+}
 .stat-sub.up { color: var(--ac); }
 .stat-divider { display: none; }
 

@@ -1,8 +1,8 @@
 {
   "name": "leetsync",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
-  "description": "Dev tooling for the LeetSync Chrome extension. Not shipped \u2014 package.ps1 has an explicit include list.",
+  "description": "Dev tooling for the LeetSync Chrome extension. Not shipped — package.ps1 has an explicit include list.",
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "package": "powershell -File package.ps1",

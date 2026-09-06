@@ -7,8 +7,12 @@ package is the most common cause of a rejection.
 ## Rejected once — do not undo this
 
 Version 2.0.0 was rejected on 6 September 2026 for **keyword spam** (reference
-*Yellow Argon*). The cited text was the study sheets, listed as seven bullets
-of brand name plus problem count:
+*Yellow Argon*) and never reached a user. The fix ships as **2.0.1**: the
+rejection was a listing field rather than a package fault, but a fresh version
+makes a clean draft instead of resubmitting the one carrying the rejection.
+
+The cited text was the study sheets, listed as seven bullets of brand name plus
+problem count:
 
 > Striver's A2Z DSA Sheet (474) • Love Babbar 450 DSA Sheet (448) • NeetCode
 > 250 (250) • …

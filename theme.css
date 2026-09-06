@@ -70,6 +70,12 @@
   --warn-tx:  #C9A85E;
   --warn-dim: #8A7638;
 
+  /* The streak tile. Warmer than --med on purpose: a flame that shares the
+     Medium badge's colour reads as a difficulty, not as a run of days. */
+  --streak-tx:  #F5A524;
+  --streak-bg:  #191108;
+  --streak-bd:  #3A2A11;
+
   --r-pop:  14px;
   --r-card: 11px;
   --r-btn:   9px;
@@ -128,6 +134,12 @@ body.theme-light {
   --warn-bg:  #eae9e9;
   --warn-tx:  #201e1d;
   --warn-dim: #605d5d;
+
+  /* Modernist owns no warm colour but the accent, so the flame is the accent
+     on the tint the theme already gives accented panels. */
+  --streak-tx:  #ec3013;
+  --streak-bg:  #ffe0d9;
+  --streak-bd:  #ec3013;
 
   --r-pop: 0px; --r-card: 0px; --r-btn: 0px;
   --r-sm: 0px;  --r-xs: 0px;   --r-pill: 0px;
