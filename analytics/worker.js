@@ -554,27 +554,37 @@ async function liveAnnouncement(env, installId) {
                 f.kind AS quote_kind, f.message AS quote_message,
                 f.created_at AS quote_at`;
 
+  // Everything this install could be shown, best first -- not one winner.
+  //
+  // A reply stays active until another reply supersedes it, and there is no
+  // delivery receipt to retire it. Returning only the top-ranked row therefore
+  // meant that once someone had been replied to and had dismissed it, the
+  // reply kept winning the ordering forever and every later broadcast was
+  // invisible to them. The client knows what it has already dismissed; the
+  // server does not, so the server sends the options and lets it choose.
   const rows = installId
     ? await all(env,
         `SELECT ${COLS} FROM announcements a
          LEFT JOIN feedback f ON f.id = a.feedback_id
          WHERE a.active = 1 AND (a.target_install IS NULL OR a.target_install = ?)
          ORDER BY (a.target_install IS NOT NULL) DESC, a.created_at DESC, a.id DESC
-         LIMIT 1`, installId)
+         LIMIT 4`, installId)
     : await all(env,
         `SELECT ${COLS} FROM announcements a
          LEFT JOIN feedback f ON f.id = a.feedback_id
          WHERE a.active = 1 AND a.target_install IS NULL
          ORDER BY a.created_at DESC, a.id DESC LIMIT 1`);
 
-  const row = rows[0];
-  if (!row) return { announcement: null };
+  const announcements = rows.map((row) => {
+    const { quote_kind, quote_message, quote_at, ...announcement } = row;
+    if (quote_message) {
+      announcement.quote = { kind: quote_kind, message: quote_message, createdAt: quote_at };
+    }
+    return announcement;
+  });
 
-  const { quote_kind, quote_message, quote_at, ...announcement } = row;
-  if (quote_message) {
-    announcement.quote = { kind: quote_kind, message: quote_message, createdAt: quote_at };
-  }
-  return { announcement };
+  // `announcement` stays for anything still reading the old shape.
+  return { announcements, announcement: announcements[0] || null };
 }
 
 async function sendAnnouncement(env, body) {

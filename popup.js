@@ -1553,12 +1553,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // rather than a boolean or its text: a boolean would swallow every later
   // message, and text would re-show one that was merely re-sent.
   // ═══════════════════════════════════════════════════════════
-  const DISMISSED_BROADCAST = 'dismissedBroadcastId';
+  const DISMISSED_BROADCASTS = 'dismissedBroadcastIds';
+  // One id was enough while a broadcast was the only kind of message there
+  // was. It stopped being enough the moment a reply could outrank one.
+  const DISMISSED_LEGACY = 'dismissedBroadcastId';
 
-  Analytics.announcement().then((note) => {
-    if (!note || !note.message) return;
-    chrome.storage.local.get([DISMISSED_BROADCAST], (data) => {
-      if (data && data[DISMISSED_BROADCAST] === note.id) return;
+  Analytics.announcements().then((notes) => {
+    if (!notes.length) return;
+    chrome.storage.local.get([DISMISSED_BROADCASTS, DISMISSED_LEGACY], (data) => {
+      const seen = new Set(Array.isArray(data && data[DISMISSED_BROADCASTS])
+        ? data[DISMISSED_BROADCASTS] : []);
+      if (data && data[DISMISSED_LEGACY] != null) seen.add(data[DISMISSED_LEGACY]);
+
+      // The best thing not already dismissed, rather than the best thing.
+      const note = notes.find((n) => n && n.message && !seen.has(n.id));
+      if (!note) return;
 
       const modal = document.getElementById('broadcastModal');
       document.getElementById('broadcastText').textContent = note.message;
@@ -1590,7 +1599,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const close = () => {
         modal.style.display = 'none';
-        chrome.storage.local.set({ [DISMISSED_BROADCAST]: note.id });
+        seen.add(note.id);
+        // Capped: the set only has to outlive the rows still active on the
+        // server, and a Set keeps insertion order, so the newest survive.
+        chrome.storage.local.set({
+          [DISMISSED_BROADCASTS]: Array.from(seen).slice(-20),
+        });
       };
       document.getElementById('broadcastClose').addEventListener('click', close);
       modal.addEventListener('click', (e) => { if (e.target === modal) close(); });

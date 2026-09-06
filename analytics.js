@@ -140,24 +140,29 @@ const Analytics = (() => {
   }
 
   /**
-   * The current broadcast, or null.
+   * Everything this install could be shown right now, best first.
    *
-   * A plain read that sends nothing — no install id, no consent needed, and
-   * the server learns nothing about who asked beyond the request itself. It
-   * replaces polling a config file in the repo, so a message can go out
+   * A list rather than one message, because the caller is the only side that
+   * knows what has already been dismissed. A reply addressed to this person
+   * outranks a broadcast, but it also stays active indefinitely, so returning
+   * only the winner let one dismissed reply hide every broadcast after it.
+   *
+   * It replaces polling a config file in the repo, so a message can go out
    * without shipping a commit.
    */
-  async function announcement() {
-    if (!configured()) return null;
+  async function announcements() {
+    if (!configured()) return [];
     try {
-      // Sends the install id so the server can answer with a reply written to
+      // Sends the install id so the server can include a reply written to
       // this person, not only the message everybody is getting.
       const res = await fetch(`${ENDPOINT}/announcement?installId=${encodeURIComponent(await installId())}`);
-      if (!res.ok) return null;
+      if (!res.ok) return [];
       const body = await res.json();
-      return (body && body.announcement) || null;
+      if (body && Array.isArray(body.announcements)) return body.announcements;
+      // A worker that has not been redeployed yet still answers the old shape.
+      return body && body.announcement ? [body.announcement] : [];
     } catch {
-      return null;
+      return [];
     }
   }
 
@@ -412,7 +417,7 @@ const Analytics = (() => {
   return {
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
-    leaderboard, announcement, sendFeedback,
+    leaderboard, announcements, sendFeedback,
     CONSENT_KEY, SHARE_CODE_KEY, QUEUE_KEY, ID_KEY, NAME_KEY, PING_KEY,
     pick, MAX_QUEUE, BATCH, MAX_CODE, MAX_NAME,
   };
