@@ -11,52 +11,28 @@ so they are pickable as a first frame or an ingredient.
 
 ## Agent instructions
 
-Flow's **Agent instructions** panel takes one rule per entry. These are
-standing rules — they apply to every generation, so they do not have to be
-repeated in a prompt. Add them one at a time with **+ Add instruction**.
-
-Copy each line as its own instruction:
-
-```
-Never render text, letters, numbers, logos or interface labels anywhere in the frame. If a screen is visible, keep it out of focus or cropped by the frame edge.
-```
+Flow's **Agent instructions** panel takes a single entry, so all of it goes in
+one block. These are standing rules — they apply to every generation and do
+not have to be repeated in a prompt. Keeping the grade standing rather than
+inline is what makes six separately generated clips look like one film.
 
 ```
-Camera is locked off or moves very slowly. No whip pans, no orbits, no drone moves, no crash zooms, no handheld shake beyond a barely perceptible drift.
+Every shot is one continuous take — no cuts, dissolves or montage inside a clip. Camera locked off or moving very slowly: no whip pans, orbits, drone moves or crash zooms, and no handheld shake beyond a barely perceptible drift. Real rooms, real hands, practical light; no holograms, floating interfaces, particle effects or science fiction. Never render text, letters, numbers, logos or interface labels anywhere in the frame — if a screen is visible keep it out of focus or cropped by the frame edge — and never show LeetCode, GitHub, Chrome or any other real brand. Human performance stays small: a breath, a lean, a glance; never a broad smile, a thumbs up or any celebration. Audio is diegetic only — room tone, a keyboard, distant traffic — with no music, voiceover, whooshes or risers. Colour grade: near-black background, a single vivid green accent, cool neutral shadows; no warm orange, no teal push, no golden hour.
 ```
 
-```
-One continuous shot per clip. Never cut, dissolve or montage inside a single generation.
-```
+For a **Modernist** cut, swap the final sentence for:
 
 ```
-Real hands, real desks, ordinary rooms, practical light. No holograms, no floating interfaces, no particle effects, no science fiction.
+Colour grade: bright off-white background, a single vivid red accent, hard black lines, flat even light; no warm tint, no bloom, no haze.
 ```
 
-```
-Human performance stays small: a breath, a lean, a glance. Never a broad smile, a thumbs up, a fist pump or any celebration.
-```
+If the field will not take that much, this keeps the load-bearing half. The
+grade is the one rule that also works pasted into each prompt, so it is the
+first thing to drop from here.
 
 ```
-Audio is diegetic only — room tone, a keyboard, distant traffic, a chair. No music, no voiceover, no whooshes, no risers.
+One continuous locked-off take, no cuts. Never render text, numbers, logos or brand names anywhere in frame; keep any screen out of focus. Real rooms, practical light, no sci-fi. Human performance small, no celebration. Diegetic audio only, no music. Grade near-black with a single vivid green accent and cool shadows.
 ```
-
-```
-Never show LeetCode, GitHub, Chrome or any other real brand name, logo or product interface.
-```
-
-Then **one** of these two, depending on which theme you are cutting:
-
-```
-Colour grade: near-black background, a single vivid green accent, cool neutral shadows. No warm orange, no teal push, no golden hour.
-```
-
-```
-Colour grade: bright off-white background, a single vivid red accent, hard black lines, flat even light. No warm tint, no bloom, no haze.
-```
-
-Keeping the grade as a standing instruction is what makes six separately
-generated clips look like one film.
 
 ---
 
