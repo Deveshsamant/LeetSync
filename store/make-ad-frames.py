@@ -234,6 +234,13 @@ def main():
         print('  %-34s %sx%s  %d KB'
               % (fname, im.size[0], im.size[1], os.path.getsize(path) // 1024))
 
+    # The prompts travel with the pictures: uploading eight frames to Flow and
+    # then hunting for what to type at them is how a kit gets half used.
+    prompts = os.path.join(ROOT, 'store', 'ad-prompts.md')
+    if os.path.exists(prompts):
+        shutil.copy(prompts, os.path.join(OUT, 'PROMPTS.md'))
+        print('  %-34s (copied)' % 'PROMPTS.md')
+
     shutil.rmtree(SRC, ignore_errors=True)
     print('\n%d frames in store/ad/' % len(written))
 
