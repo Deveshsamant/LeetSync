@@ -114,6 +114,120 @@ Same rule: **cut at three or four seconds.**
 
 ---
 
+## One prompt per screen
+
+Every one of these is **Frames to video**, with the matching PNG from
+`store/ad/` as the first frame. They are all the same shot — a locked-off
+panel — so the motion is in the light and the ground, never in the
+interface. Asking Veo to animate the UI is asking it to invent one.
+
+Fourteen frames is far more than a thirty-second cut needs. Generate the
+five or six the script calls for; the rest are there so the script can
+change without another capture run.
+
+**Cut every one of these at three or four seconds.** Past that the numbers
+start to rot, whatever the prompt says.
+
+### `screen-setup.png` — Connect once
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A slow warm light rises from the lower left across the background, as if a lamp had just been switched on off-camera.
+> Audio: a room at night, one distant keyboard press, nothing else.
+
+### `screen-consent.png` — The data question
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. The background brightens very slightly and evenly across the whole frame, like daylight returning behind a blind.
+> Audio: near silence, a chair shifting once in another room.
+
+### `screen-dashboard-1.png` — Did it land
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A soft red highlight drifts slowly from left to right across the surface of the panel, as if a car had passed a window.
+> Audio: low room tone, a fan somewhere behind the camera.
+
+### `screen-dashboard-2.png` — Ninety days
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. Fine dust motes drift slowly through the air in front of the panel, catching the light. The panel itself does not move.
+> Audio: near silence, the faint hum of a monitor.
+
+### `screen-solved-1.png` — Everything you solved
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A soft vertical shadow passes slowly down the background, as if someone had walked past a window behind the camera.
+> Audio: a distant door, then room tone.
+
+### `screen-solved-2.png` — The list continues
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. The faint grid in the background brightens very slightly and then settles, a single slow breath of light.
+> Audio: room tone, a page turning somewhere off-camera.
+
+### `screen-sheets-1.png` — Seven sheets
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A soft light blooms slowly from behind the top edge of the panel and fades back down.
+> Audio: quiet room tone, a pen set down on a desk.
+
+### `screen-sheets-2.png` — Ticking themselves
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A very slow diagonal sheen crosses the surface of the panel from the top left to the bottom right, like light off glass.
+> Audio: near silence, distant traffic through a closed window.
+
+### `screen-battle-1.png` — The leaderboard
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A slow pulse of light swells from the lower right of the background and settles again — one breath, no repeat.
+> Audio: low room tone rising very slightly, no music.
+
+### `screen-battle-2.png` — Rivals
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. The faint reflection of a window drifts slowly across the panel from right to left.
+> Audio: a room with a window open, distant street noise.
+
+### `screen-settings-1.png` — Every switch
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. The background light shifts very slowly from cool to slightly warm across the whole frame.
+> Audio: room tone, the click of a lamp switch off-camera.
+
+### `screen-settings-2.png` — What is sent
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A soft shadow creeps in slowly from the left edge of the frame and stops partway across the background.
+> Audio: near silence, a clock somewhere in the building.
+
+### `screen-settings-3.png` — Say something
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A warm light rises slowly from below the frame and settles evenly across the background.
+> Audio: quiet room tone, one soft keyboard press near the end.
+
+### `screen-tracker.png` — All 895
+
+> Locked-off static camera. No zoom, no pan, no push, no handheld drift.
+> The panel and everything on it stays completely still and unchanged: no
+> text moves, no numbers change, nothing appears or disappears. A broad soft sweep of light crosses the panel from left to right, as if a window were behind the viewer and a cloud had moved.
+> Audio: a large quiet room, distant footsteps.
+
+---
+
 ## B-roll worth having
 
 Cheap to generate, and it saves a cut when a shot lands two seconds short.
