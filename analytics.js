@@ -150,17 +150,34 @@ const Analytics = (() => {
    * It replaces polling a config file in the repo, so a message can go out
    * without shipping a commit.
    */
+  async function readAnnouncements(id) {
+    const url = id
+      ? `${ENDPOINT}/announcement?installId=${encodeURIComponent(id)}`
+      : `${ENDPOINT}/announcement`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const body = await res.json();
+    if (body && Array.isArray(body.announcements)) return body.announcements;
+    // A worker answering the older shape returns a single row.
+    return body && body.announcement ? [body.announcement] : [];
+  }
+
   async function announcements() {
     if (!configured()) return [];
     try {
-      // Sends the install id so the server can include a reply written to
-      // this person, not only the message everybody is getting.
-      const res = await fetch(`${ENDPOINT}/announcement?installId=${encodeURIComponent(await installId())}`);
-      if (!res.ok) return [];
-      const body = await res.json();
-      if (body && Array.isArray(body.announcements)) return body.announcements;
-      // A worker that has not been redeployed yet still answers the old shape.
-      return body && body.announcement ? [body.announcement] : [];
+      // With the install id, so a reply written to this person is included and
+      // not just the message everybody is getting.
+      const mine = await readAnnouncements(await installId());
+      // An older worker returns one row and ranks a reply above a broadcast,
+      // which is how a single dismissed reply came to hide every broadcast
+      // behind it. Asking again without the id gets the global one -- that
+      // read cannot return anybody's reply. Skipped entirely once the first
+      // answer already carried a broadcast, so the usual case is one request.
+      if (mine.some((n) => n && !n.target_install)) return mine;
+
+      const global = await readAnnouncements(null);
+      const seen = new Set(mine.map((n) => n && n.id));
+      return mine.concat(global.filter((n) => n && !seen.has(n.id)));
     } catch {
       return [];
     }
