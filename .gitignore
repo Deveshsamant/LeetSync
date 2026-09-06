@@ -21,3 +21,4 @@ node_modules/
 preview-popup.html
 preview-tracker.html
 store/dist/
+store/ad/
