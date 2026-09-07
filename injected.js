@@ -13,7 +13,9 @@
   'use strict';
 
   // Version-based guard: allows re-injection when extension updates
-  const INJECTOR_VERSION = 4;
+  // 5: answers __LC_PUSHER_GET_CODE__ with the editor model's text. A tab
+  // still running 4 would never gain that listener without this bump.
+  const INJECTOR_VERSION = 5;
   if (window.__lcPusherVersion >= INJECTOR_VERSION) return;
   window.__lcPusherVersion = INJECTOR_VERSION;
 
@@ -145,6 +147,36 @@
 
     return originalSend.apply(this, args);
   };
+
+  // ── The editor's own text, on request ───────────────────────
+  //
+  // The content script is in the isolated world and cannot reach the page's
+  // `monaco` global, so it used to scrape the rendered lines instead. That
+  // cannot work: Monaco is virtualised. It positions every line absolutely,
+  // keeps only the visible ones in the DOM, and recycles those elements as
+  // you scroll — so the nodes come back in neither reading order nor
+  // completeness, and solutions arrived in the repository shuffled and cut
+  // short. The model has the whole file, in order, and this is the only side
+  // that can ask it.
+  window.addEventListener('message', function (event) {
+    if (event.source !== window) return;
+    const msg = event.data;
+    if (!msg || msg.type !== '__LC_PUSHER_GET_CODE__') return;
+
+    let code = null;
+    try {
+      const models = (window.monaco && window.monaco.editor
+        && window.monaco.editor.getModels) ? window.monaco.editor.getModels() : [];
+      // LeetCode mounts more than one model — the test-case pane and any diff
+      // view are models too. The solution is the longest of them.
+      const values = models.map(function (m) {
+        try { return m.getValue(); } catch (e) { return ''; }
+      }).filter(Boolean).sort(function (a, b) { return b.length - a.length; });
+      if (values.length) code = values[0];
+    } catch (e) {}
+
+    window.postMessage({ type: '__LC_PUSHER_CODE__', id: msg.id, code: code }, '*');
+  });
 
   console.log('[LeetSync] Fetch & XHR interceptors active (Submit only — Run Code ignored)');
 })();

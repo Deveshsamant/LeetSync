@@ -480,7 +480,12 @@
         }
       }
 
-      // Fallback: try extracting code from the editor DOM
+      // The page's own editor model: the whole file, in order.
+      if (!code) {
+        code = await requestEditorCode();
+      }
+
+      // Only now the rendered DOM, which can be neither complete nor ordered.
       if (!code) {
         code = extractCodeFromEditor();
       }
@@ -590,19 +595,59 @@
   }
 
   /**
-   * Fallback: extract code from the Monaco editor DOM.
+   * Ask the MAIN world for the editor model's text.
+   *
+   * injected.js runs in the page and can reach `monaco`; this side cannot.
+   * Resolves null if nothing answers, so a page without the injector — or an
+   * older one still cached — falls through rather than hanging.
+   */
+  function requestEditorCode(timeoutMs = 800) {
+    return new Promise((resolve) => {
+      const id = 'c' + Date.now() + Math.random().toString(36).slice(2, 8);
+      let timer = null;
+      const finish = (value) => {
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timer);
+        resolve(value || null);
+      };
+      const onMessage = (event) => {
+        if (event.source !== window) return;
+        const msg = event.data;
+        if (msg?.type === '__LC_PUSHER_CODE__' && msg.id === id) finish(msg.code);
+      };
+      window.addEventListener('message', onMessage);
+      timer = setTimeout(() => finish(null), timeoutMs);
+      window.postMessage({ type: '__LC_PUSHER_GET_CODE__', id }, '*');
+    });
+  }
+
+  /**
+   * Last resort: read the rendered editor.
+   *
+   * Monaco is virtualised — it positions each line absolutely, keeps only the
+   * visible ones in the DOM, and recycles those elements as you scroll. So
+   * querySelectorAll returns them in neither reading order nor completeness,
+   * which is how solutions came to be committed shuffled and cut short.
+   *
+   * Sorting by the `top` Monaco sets recovers the order of what is there. It
+   * cannot recover what was never rendered, so this runs only after both APIs
+   * and the page's own model have failed.
    */
   function extractCodeFromEditor() {
-    // Method 1: Monaco editor view-lines
     const viewLines = document.querySelector('.monaco-editor .view-lines');
     if (viewLines) {
-      const lines = viewLines.querySelectorAll('.view-line');
+      const lines = Array.from(viewLines.querySelectorAll('.view-line'));
       if (lines.length > 0) {
-        return Array.from(lines).map(line => line.textContent).join('\n');
+        lines.sort((a, b) =>
+          (parseFloat(a.style.top) || 0) - (parseFloat(b.style.top) || 0));
+        // Leading indentation is rendered as non-breaking spaces.
+        return lines
+          .map(line => line.textContent.replace(/\u00a0/g, ' '))
+          .join('\n');
       }
     }
 
-    // Method 2: CodeMirror (older UI)
+    // CodeMirror (older UI) keeps the whole document, so it needs none of this.
     const cm = document.querySelector('.CodeMirror');
     if (cm && cm.CodeMirror) {
       return cm.CodeMirror.getValue();
