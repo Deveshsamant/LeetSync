@@ -74,10 +74,10 @@ progress first, so signing back in restores it.
 STUDY SHEETS
 
 Seven of the DSA sheets people actually work through are built in, covering 895
-unique problems between them — the Striver collections, both NeetCode lists and
-Love Babbar's 450 among them. Solving a problem ticks it off in every sheet it
-appears in. Anything that is not a LeetCode problem you can tick by hand, and a
-full-page tracker gives you search and filters across all of them.
+unique problems between them. Solving a problem ticks it off in every sheet it
+appears in, so one solve can advance four at once. Anything that is not a
+LeetCode problem you can tick by hand, and a full-page tracker gives you search
+and filters across all of them.
 
 KEEPS YOU GOING
 

@@ -2027,6 +2027,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let sheetData = null;
   let solvedIds = new Set();
   let manualDone = new Set();
+  // Which group was last left open, per sheet. A sheet is thirty sections
+  // long and somebody working through day 7 had to scroll past six finished
+  // ones on every single open.
+  let openGroups = {};
 
   function getSolvedIds() {
     return new Promise(resolve => {
@@ -2080,6 +2084,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (saved && sheetData.sheets.some(s => s.id === saved)) sheetPicker.value = saved;
     }
 
+    openGroups = await new Promise(r => chrome.storage.local.get(
+      ['sheetOpenGroups'], d => r((d && d.sheetOpenGroups) || {})));
+
     [solvedIds, manualDone] = await Promise.all([getSolvedIds(), getManualDone()]);
     renderSheet(sheetPicker.value);
   }
@@ -2099,6 +2106,19 @@ document.addEventListener('DOMContentLoaded', () => {
       done === all.length ? 'complete' : `${all.length - done} to go`;
     // Delayed so the width change animates rather than painting in place.
     setTimeout(() => { document.getElementById('sheetBarFill').style.width = `${pct}%`; }, 60);
+
+    // Where to open.
+    //
+    // The remembered group wins, because it is the only signal the reader
+    // gave deliberately. Failing that, the furthest section with anything
+    // ticked — "first incomplete" is the obvious rule and the wrong one, since
+    // an early section left half-finished would drag the sheet back to the top
+    // forever.
+    const doneIn = (g) => g.questions.filter(q => isDone(sheet.id, q)).length;
+    let openIndex = Number.isInteger(openGroups[sheet.id])
+      && openGroups[sheet.id] < sheet.groups.length
+      ? openGroups[sheet.id]
+      : sheet.groups.reduce((far, g, i) => (doneIn(g) > 0 ? i : far), 0);
 
     sheetList.innerHTML = '';
     sheet.groups.forEach((group, index) => {
@@ -2128,13 +2148,32 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       head.addEventListener('click', () => {
         build();
+        const opening = !wrap.classList.contains('open');
         wrap.classList.toggle('open');
+        // Remembered on open only: closing a section says "not this one", not
+        // "take me back to the top next time".
+        if (opening) {
+          openGroups[sheet.id] = index;
+          chrome.storage.local.set({ sheetOpenGroups: openGroups });
+        }
       });
-      if (index === 0) { build(); wrap.classList.add('open'); }
+      if (index === openIndex) { build(); wrap.classList.add('open'); }
 
       wrap.append(head, items);
       sheetList.appendChild(wrap);
     });
+
+    // Scrolling is what the reader was otherwise doing by hand. Only when
+    // there is something above to scroll past.
+    //
+    // Synchronously rather than in a frame callback: reading layout here
+    // forces the reflow this needs anyway, and requestAnimationFrame does not
+    // fire at all while the document is hidden, which is how this renders
+    // under a headless capture.
+    if (openIndex > 0) {
+      const target = sheetList.children[openIndex];
+      if (target) target.scrollIntoView({ block: 'start' });
+    }
   }
 
   function renderRow(container, sheetId, q, countEl, group) {

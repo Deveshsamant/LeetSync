@@ -32,6 +32,19 @@ LEVELS = {'Easy', 'Medium', 'Hard', '-'}
 SKIP = {'#', 'PROBLEM', 'LEVEL', 'LEETCODE LINK'}
 
 
+# Keyed by file name, which is where the sheet id comes from. A sheet with no
+# entry keeps whatever its PDF calls it.
+DISPLAY_NAMES = {
+    'striver-a2z-sheet': 'A2Z DSA Sheet',
+    'love-babbar-450':   '450 DSA Sheet',
+    'neetcode-250':      'Coding Patterns 250',
+    'striver-sde-sheet': 'SDE Sheet',
+    'neetcode-150':      'Coding Patterns 150',
+    'striver-79-sheet':  'Revision Sheet 79',
+    'striver-blind-75':  'Blind 75',
+}
+
+
 def leetcode_catalogue():
     """slug -> {id, paid} for every LeetCode problem."""
     req = urllib.request.Request(
@@ -183,9 +196,15 @@ def parse(path, catalogue):
     count = sum(len(g['questions']) for g in groups)
     linked = sum(1 for g in groups for q in g['questions'] if q.get('id'))
 
+    sheet_id = os.path.splitext(os.path.basename(path))[0]
     return {
-        'id': os.path.splitext(os.path.basename(path))[0],
-        'name': title,
+        'id': sheet_id,
+        # The PDF's own title carries its author's name. The sheets are theirs
+        # and the `source` link below says so, but a picker full of other
+        # people's brands is not what this extension is for -- and a store
+        # listing that lists them reads as keyword stuffing, which is what got
+        # 2.0.0 rejected. The id never moves, so progress does not either.
+        'name': DISPLAY_NAMES.get(sheet_id, title),
         'source': source.group(1).rstrip('�').rstrip() if source else '',
         'count': count,
         'trackable': linked,
