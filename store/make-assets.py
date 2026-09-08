@@ -140,8 +140,12 @@ def build():
     assets.append(('screenshots/03-sheets.png', 1280, 800, portrait(
         '895 problems',
         'Seven study sheets, built in',
-        "Striver's A2Z, Love Babbar 450, NeetCode 250 and 150, the SDE Sheet, "
-        "Striver's 79 and Blind 75. Solve once and it ticks everywhere it appears.",
+        # Not a list of their authors' names. That list, in the description,
+        # is what got 2.0.0 rejected for keyword spam -- and the same policy
+        # clause covers screenshots, so it cannot come back in through a
+        # caption.
+        "Built into the extension rather than fetched, so they work offline. "
+        "Solve once and it ticks in every sheet that problem appears in.",
         ['1,667 rows, 895 unique problems',
          'No download, no account',
          'Tick non-LeetCode rows by hand'],
@@ -167,7 +171,10 @@ def build():
     small = (
         '<div style="display:flex;flex-direction:column;justify-content:center;'
         'height:100%%;padding:0 34px">\n'
-        '  <img src="%s" width="52" height="52" style="display:block;margin-bottom:20px" alt="">\n'
+        # The store renders this tile small in a search row, where a 52px
+        # mark on a 440px canvas all but disappears. There is room: the
+        # stack came to 184 of 280px.
+        '  <img src="%s" width="96" height="96" style="display:block;margin-bottom:18px" alt="">\n'
         '  <div style="font-size:37px;font-weight:900;letter-spacing:-.01em;'
         'text-transform:uppercase;line-height:1">LeetSync</div>\n'
         '  <div class="bar" style="width:62px;margin:15px 0 14px"></div>\n'
