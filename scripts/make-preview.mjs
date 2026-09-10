@@ -170,6 +170,24 @@ const stub = `
     delete store.githubToken;
     delete store.githubRepo;
     store.wizardStep = wantStep;
+
+    // Drive the step directly rather than leaning on popup.js restoring it.
+    // Restore deliberately refuses to land past step 3 without a token --
+    // steps 4 and 5 are about an account that exists -- so the consent screen
+    // is unreachable that way, and it is a screen the store listing shows.
+    window.addEventListener('load', () => setTimeout(() => {
+      const target = document.getElementById('wizStep' + wantStep);
+      if (!target) return;
+      document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+      target.classList.add('active');
+      document.querySelectorAll('.wizard-dot').forEach((dot) => {
+        const n = Number(dot.dataset.step);
+        dot.classList.toggle('done', n < wantStep);
+        dot.classList.toggle('active', n === wantStep);
+      });
+      const counter = document.querySelector('.wizard-step-count');
+      if (counter) counter.textContent = 'STEP ' + wantStep + ' / 5';
+    }, 500));
   }
 
   // Select the requested tab once the popup has wired its own handlers, and

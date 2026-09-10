@@ -132,8 +132,8 @@
         <div class="wizard-body">
           <div class="sec-label">OPTIONAL</div>
           <h2>Compete, and steer what gets built</h2>
-          <p class="wizard-desc">Setup is done. Both are on — turn either off
-            here or in Settings, any time.</p>
+          <p class="wizard-desc">Both are on. Turn either off here, or later in
+            Settings.</p>
 
           <div class="consent-row">
             <div class="consent-text">
@@ -163,7 +163,11 @@
                which pushed the links and the buttons past the bottom of a
                600px popup at anything but 100% zoom. The switches and what
                each one does stay visible; the itemised list is one tap. -->
-          <details class="disclose-wrap">
+          <!-- Open by default. Reporting is opt-out from 2.1.0, and a
+               reviewer reading "prominent disclosure" should not have to click
+               to find the itemised list. It collapses if the reader wants the
+               room; it does not start collapsed. -->
+          <details class="disclose-wrap" open>
             <summary>What exactly is shared</summary>
           <dl class="disclose">
             <dt>SENT</dt>

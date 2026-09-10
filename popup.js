@@ -61,7 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('wizToken').value = data.githubToken;
         wizGoTo(3);
       } else if (data.wizardStep && data.wizardStep > 1) {
-        wizGoTo(data.wizardStep);
+        // Never past 3. Steps 4 and 5 are about an account that exists, and
+        // arriving at either without a token is arriving at nothing.
+        wizGoTo(Math.min(data.wizardStep, 3));
       }
     } else {
       wizardOverlay.style.display = 'none';

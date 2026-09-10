@@ -411,7 +411,7 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 11px 0;
+  padding: 9px 0;
   border-top: 1px solid var(--bd-soft);
 }
 .consent-row:first-of-type { border-top: 0; padding-top: 4px; }
@@ -422,9 +422,9 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
 .disclose {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px 12px;
-  margin: 12px 0 0;
-  padding-top: 11px;
+  gap: 5px 12px;
+  margin: 10px 0 0;
+  padding-top: 9px;
   border-top: 1px solid var(--bd-soft);
 }
 .disclose dt {
@@ -434,9 +434,9 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
   color: var(--tx-5);
   padding-top: 3px;
 }
-.disclose dd { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--tx-4); }
+.disclose dd { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--tx-4); }
 
-.disclose-wrap { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--bd-soft); }
+.disclose-wrap { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--bd-soft); }
 .disclose-wrap > summary {
   list-style: none;
   cursor: pointer;
@@ -452,7 +452,7 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
 .disclose-wrap[open] > summary { margin-bottom: 4px; }
 .disclose-wrap .disclose { margin-top: 0; padding-top: 8px; border-top: 0; }
 
-.consent-links { display: flex; gap: 16px; margin-top: 11px; }
+.consent-links { display: flex; gap: 16px; margin-top: 7px; }
 
 /* "Continuing as <name>" — what a returning user gets instead of the field. */
 .wizard-known {

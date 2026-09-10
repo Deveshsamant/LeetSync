@@ -1858,7 +1858,10 @@ async function logout() {
   // out and saying otherwise would be a lie.
   try {
     await new Promise((resolve, reject) => chrome.storage.sync.remove(
-      ['githubToken', 'githubRepo'],
+      // wizardStep too: it is where setup got to last time, and leaving it
+      // behind dropped the next sign-in straight onto the consent step with
+      // no token and nothing to consent about.
+      ['githubToken', 'githubRepo', 'wizardStep'],
       () => (chrome.runtime.lastError
         ? reject(new Error(chrome.runtime.lastError.message)) : resolve())));
   } catch (error) {
