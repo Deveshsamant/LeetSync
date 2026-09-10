@@ -96,9 +96,11 @@ what you wrote — not into an inbox you have to go and check.
 
 ─── YOUR TOKEN, YOUR REPO ───
 
-Works with a fine-grained GitHub token scoped to a single repository, with
-Contents: read and write and nothing else. The token is held in Chrome storage
-and sent only to api.github.com. It is never transmitted anywhere else.
+Works with a classic GitHub personal access token carrying the repo scope — the
+kind GitHub allows to create a repository, so setup finishes without leaving the
+extension. The token is held in Chrome storage and sent only to api.github.com.
+It is never transmitted anywhere else, and you can revoke it on GitHub at any
+time.
 
 ─── PRIVACY ───
 

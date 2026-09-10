@@ -287,6 +287,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));
   document.getElementById('wizBack3').addEventListener('click', () => wizGoTo(2));
 
+  const tokenHelpModal = document.getElementById('tokenHelpModal');
+  document.getElementById('tokenHelpOpen').addEventListener('click', () => {
+    tokenHelpModal.style.display = 'flex';
+  });
+  const closeTokenHelp = () => { tokenHelpModal.style.display = 'none'; };
+  document.getElementById('tokenHelpClose').addEventListener('click', closeTokenHelp);
+  tokenHelpModal.addEventListener('click', (event) => {
+    if (event.target === tokenHelpModal) closeTokenHelp();
+  });
+
   document.getElementById('wizNext2').addEventListener('click', async () => {
     const tokenInput = document.getElementById('wizToken');
     const nameInput = document.getElementById('wizName');

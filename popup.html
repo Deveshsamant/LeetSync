@@ -39,10 +39,14 @@
         <div class="wizard-body">
           <div class="sec-label">AUTHENTICATION</div>
           <h2>GitHub token</h2>
-          <p class="wizard-desc">A fine-grained token limited to your solutions repo is enough — grant it <strong>Contents: Read and write</strong>, nothing else. It is the safer of the two, and the only thing it cannot do is create the repository, which takes one click on GitHub.</p>
-          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" class="wizard-link">Create fine-grained token →</a>
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link" style="margin-top:6px;">Or a classic token →</a>
-          <div class="form-hint" style="margin-top:6px;">A classic token can make the repository for you, but its <code>repo</code> scope reaches every private repository you own — not just this one.</div>
+          <p class="wizard-desc">LeetSync uses a classic personal access token with
+            the <code>repo</code> scope. That is the one GitHub lets create the
+            repository for you, so setup finishes in a click.</p>
+          <div class="token-links">
+            <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link">Create classic token →</a>
+            <button type="button" class="token-help" id="tokenHelpOpen"
+                    aria-label="How to make a good classic token">?</button>
+          </div>
           <div class="form-group" style="margin-top:16px;">
             <input type="password" id="wizToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
           </div>
@@ -102,7 +106,7 @@
               <input type="checkbox" id="wizRepoPrivate">
               <span>Make it private</span>
             </label>
-            <div class="form-hint" style="margin-top:8px;">Creating a repo needs a classic <code>repo</code> token. With a fine-grained token, make the repo on GitHub first and choose "Use existing".</div>
+            <div class="form-hint" style="margin-top:8px;">A classic <code>repo</code> token creates it here. Any other kind cannot — GitHub allows only classic and OAuth tokens to create repositories — and LeetSync will offer to open GitHub for you instead.</div>
           </div>
           <div id="wizError" class="status-message status-error" style="display:none;margin-top:12px;"></div>
           <!-- Shown only when the token cannot create the repository, which is
@@ -523,7 +527,7 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </div>
-              <div class="form-hint">Stored in Chrome sync storage; sent only to api.github.com. A <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">fine-grained token</a> scoped to one repo with <strong>Contents: Read and write</strong> is all this needs — a classic <code>repo</code> token grants access to every private repo you own.</div>
+              <div class="form-hint">Stored in Chrome sync storage; sent only to api.github.com. A <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank">classic token</a> with the <code>repo</code> scope, ideally set to never expire so pushes do not stop one day. Revoke it on GitHub whenever you like.</div>
             </div>
             <div class="form-group">
               <label>
@@ -802,6 +806,38 @@
         <p class="broadcast-text" id="broadcastText"></p>
         <a class="broadcast-link" id="broadcastLink" target="_blank"
            rel="noopener noreferrer" style="display:none;">Read more ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- The token is the one step people get wrong, and GitHub's own page
+       gives no hint which of its boxes matter. -->
+  <div id="tokenHelpModal" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">A good classic token</span>
+        <button class="modal-close" id="tokenHelpClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <ol class="token-steps">
+          <li><strong>Open the token page.</strong>
+            <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" rel="noopener noreferrer">github.com/settings/tokens/new ↗</a>
+            — the link above fills in the name and scope already.</li>
+          <li><strong>Note:</strong> call it <code>LeetSync</code>, so you know what it is
+            when you next look at the list.</li>
+          <li><strong>Expiration:</strong> choose <code>No expiration</code>. An expiring
+            token stops your solutions syncing on a day you will not be expecting,
+            with no warning.</li>
+          <li><strong>Scopes:</strong> tick <code>repo</code> — the top-level box, which
+            selects the five under it. Nothing else needs ticking.</li>
+          <li><strong>Generate token</strong>, then copy it. GitHub shows it once and
+            never again.</li>
+          <li>Paste it into the box here.</li>
+        </ol>
+        <p class="token-caution">The <code>repo</code> scope reaches every repository on
+          your account, including private ones. That is what GitHub requires to create
+          a repository for you. The token stays in Chrome on this computer and is sent
+          only to api.github.com — and you can revoke it on GitHub at any moment.</p>
       </div>
     </div>
   </div>

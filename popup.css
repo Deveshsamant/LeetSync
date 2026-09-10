@@ -400,6 +400,47 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
 
 .stat-sub { font-size: 10.5px; color: var(--tx-4); margin-top: 5px; }
 
+/* The token link and its "?" sit on one line; the help is a sheet rather than
+   another paragraph, because the page it describes is on GitHub, not here. */
+.token-links { display: flex; align-items: center; gap: 10px; }
+.token-help {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--bd-ctrl);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tx-3);
+  font-family: var(--f-label);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.token-help:hover { color: var(--ac); border-color: var(--ac); }
+body.theme-light .token-help { border-radius: 0; border-width: 2px; }
+
+.token-steps { margin: 0; padding-left: 19px; display: grid; gap: 9px; }
+.token-steps li { font-size: 12.5px; line-height: 1.5; color: var(--tx-3); }
+.token-steps strong { color: var(--tx); }
+.token-steps code {
+  font-family: var(--f-label);
+  font-size: 11.5px;
+  padding: 1px 4px;
+  background: var(--bg-chip);
+  border-radius: 3px;
+}
+body.theme-light .token-steps code { border-radius: 0; }
+.token-caution {
+  margin: 13px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--bd-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--tx-4);
+}
+
 /* Consent step.
    The decision came third, under two paragraphs and a block of small grey
    type, so the screen read as something to get past rather than something to
