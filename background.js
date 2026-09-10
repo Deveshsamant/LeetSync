@@ -1808,15 +1808,34 @@ async function recordRemoval(field, key) {
  * The device id, theme and usage preferences are not progress and stay, so
  * signing back in does not look like a brand new install.
  */
+// Signing out must not wait on the network. githubAPI gives every call an
+// 8-second timeout and retries twice, so an unreachable or misconfigured repo
+// could hold the button for half a minute -- long enough that the popup is
+// closed, and a popup that closes takes the answer with it.
+const LOGOUT_PUBLISH_MS = 10000;
+
 async function logout() {
   let published = false;
   let warning = null;
-  try {
-    const result = await syncDevices({ write: true });
-    published = result.success === true;
-    if (!published) warning = result.error;
-  } catch (error) {
-    warning = error.message;
+
+  // A half-finished setup has no repo to publish to, and no reason to spend
+  // ten seconds discovering that.
+  const { githubToken, githubRepo } =
+    await new Promise(r => chrome.storage.sync.get(['githubToken', 'githubRepo'], r));
+  const connected = Boolean(githubToken && githubRepo);
+
+  if (connected) {
+    try {
+      const result = await Promise.race([
+        syncDevices({ write: true }),
+        new Promise(resolve => setTimeout(
+          () => resolve({ success: false, error: 'timed out' }), LOGOUT_PUBLISH_MS)),
+      ]);
+      published = result.success === true;
+      if (!published) warning = result.error;
+    } catch (error) {
+      warning = error.message;
+    }
   }
 
   await new Promise(r => chrome.storage.sync.remove(['githubToken', 'githubRepo'], r));
@@ -1825,7 +1844,10 @@ async function logout() {
      LAST_SYNC_KEY, SYNCED_SHEETS_KEY], r));
   await SheetProgress.save(new Set());
 
-  return { success: true, published, warning };
+  // `connected` so the popup can tell "we could not publish your progress"
+  // apart from "there was no progress to publish", which are very different
+  // things to read after pressing sign out.
+  return { success: true, published, warning, connected };
 }
 
 // ── Auto Re-injection on Extension Load ──────────────────────

@@ -1858,7 +1858,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // Said plainly rather than hidden: whether the progress reached the repo
       // decides whether signing back in restores it.
-      if (!res.published) {
+      // Only a real failure to publish is worth alarming about. Signing out
+      // of an install that never finished connecting had nothing to publish.
+      if (!res.published && res.connected) {
         showSyncMessage(
           'Signed out, but your progress could not be published first' +
           (res.warning ? ` (${res.warning})` : '') + '.', 'error');
