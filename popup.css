@@ -13,6 +13,23 @@
    clamped to 600 here — the dashboard column scrolls internally instead. */
 html, body { width: 420px; height: 600px; overflow: hidden; }
 
+/* Nothing styled a scrollbar, so every scrolling area in a 420px popup wore
+   the platform's full-width one -- which on Windows is wider than the gutter
+   the layout leaves for it, and reads as the panel being broken rather than
+   scrolled. Thin, in the theme's own colours, and only visible against a
+   surface that is actually scrolling. */
+* { scrollbar-width: thin; scrollbar-color: var(--bd-ctrl) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--bd-ctrl);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-clip: content-box; background: var(--tx-5); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 body {
   font-family: var(--f-body);
   background: var(--bg);
