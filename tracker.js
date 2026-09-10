@@ -168,8 +168,13 @@ function renderOverview() {
 
   const src = $('tkSource');
   if (sheet.source) {
+    // The link is kept -- the sheet belongs to whoever wrote it and following
+    // it should reach them. What is not printed is the URL itself: these paths
+    // carry the authors' names (strivers-a2z-sheet, neetcode250), which is the
+    // wording that was stripped from every sheet name and should not come back
+    // through a link label.
     src.href = sheet.source;
-    src.textContent = sheet.source.replace(/^https?:\/\//, '');
+    src.textContent = 'View the original sheet';
   } else {
     src.removeAttribute('href');
     src.textContent = '';

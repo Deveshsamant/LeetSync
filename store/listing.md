@@ -201,7 +201,7 @@ leetcode.com — to detect accepted submissions and read the solution on the pro
 declared in `optional_host_permissions` and requested during setup rather than
 at install:
 ```
-The developer's own endpoint. It receives anonymous usage events for users who have switched usage reporting on, and an activity ping (a random install ID and the extension version, at most twice a day) which is on by default and has its own switch in Settings. It also serves two public reads that carry no identifier: the leaderboard shown in the Battle tab, and any message the developer broadcasts to users. It is an optional permission, requested at the point the user is shown the reporting switch during setup, so that installing the extension does not require granting it.
+leetsync-analytics.devsamant1744.workers.dev is the developer's own endpoint. It receives anonymous usage events for users who have switched usage reporting on, and an activity ping (a random install ID and the extension version, at most twice a day) which is on by default and has its own switch in Settings. It also serves two public reads that carry no identifier: the leaderboard shown in the Battle tab, and any message the developer broadcasts to users. It is an optional permission, requested at the point the user is shown the reporting switch during setup, so that installing the extension does not require granting it.
 ```
 
 **Remote code**: No, I am not using Remote code.
