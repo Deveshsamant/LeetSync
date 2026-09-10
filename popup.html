@@ -595,6 +595,13 @@
               <span class="toggle-knob"></span>
             </button>
           </div>
+          <!-- Shown only when reporting is on but the Worker's origin is not
+               granted, which is what an upgrade from 2.1.0 can leave behind. -->
+          <div class="consent-repair" id="analyticsRepair" hidden>
+            <span>Reporting is on, but this browser has not granted access to
+              the reporting server, so nothing is being sent.</span>
+            <button class="btn btn-secondary" id="analyticsRepairBtn" type="button">Grant access</button>
+          </div>
           <div class="form-hint" style="margin-top:8px;">
             On unless you turn it off, and you were asked during setup. It is
             what ranks you on the public leaderboard in the Battle tab; switch it

@@ -472,6 +472,24 @@ body.theme-light .token-steps code { border-radius: 0; }
    answer. The switches come first now, each with the one line that says what
    it does, and the disclosure sits under them as a labelled list rather than
    prose. */
+/* The reporting switch says one thing and the browser says another --
+   shown only in that state, and it carries the button that resolves it. */
+.consent-repair {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--tx-2);
+}
+.consent-repair span { flex: 1; min-width: 0; }
+.consent-repair .btn { flex: none; }
+
 .consent-row {
   display: flex;
   align-items: center;

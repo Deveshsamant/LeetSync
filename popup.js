@@ -287,7 +287,35 @@ document.addEventListener('DOMContentLoaded', () => {
   bindToggle(wizAnalyticsToggle);
   bindToggle(wizPingToggle);
 
+  /**
+   * Ask for the permissions the manifest deliberately leaves out.
+   *
+   * Both are optional so that Chrome's install dialog stays down to the two
+   * hosts the extension cannot work without. Notifications are asked for
+   * either way -- they announce achievements, which everybody gets. The
+   * Worker's origin is only asked for when something will actually be sent
+   * to it.
+   *
+   * Chrome only honours a request while the click that triggered it is still
+   * live, so this must be the first thing the handler does: anything awaited
+   * before it loses the gesture and the request is refused without ever being
+   * shown. A refusal here is a normal answer, not an error -- nothing that
+   * follows depends on it.
+   */
+  function grantOptional(wantsReporting) {
+    const req = { permissions: ['notifications'], origins: [] };
+    if (wantsReporting && Analytics.configured()) req.origins.push(Analytics.ORIGIN);
+    return new Promise((resolve) => {
+      chrome.permissions.request(req, (granted) => {
+        void chrome.runtime.lastError;   // a decline is not a failure
+        resolve(granted === true);
+      });
+    });
+  }
+
   async function finishConsent(optIn) {
+    // First, before any await: see grantOptional.
+    await grantOptional(optIn || wizPingToggle.classList.contains('on'));
     // setEnabled writes the consent and, when on, creates the install id, so
     // the id exists before the first event rather than on the first send.
     await Analytics.setEnabled(optIn === true);
@@ -1558,9 +1586,38 @@ document.addEventListener('DOMContentLoaded', () => {
     shareCodeToggle.setAttribute('aria-checked', on ? 'true' : 'false');
   }
 
+  /**
+   * Reporting is on, but is the browser actually letting anything through?
+   *
+   * Those two can disagree in exactly one situation: an upgrade from a version
+   * where the Worker's origin was a required host permission to one where it
+   * is optional. Chrome does not carry the grant across, so the switch keeps
+   * saying ON while every send is refused. Nothing surfaces that on its own,
+   * so it is surfaced here.
+   */
+  const analyticsRepair = document.getElementById('analyticsRepair');
+
+  async function paintAnalyticsRepair(on) {
+    if (!analyticsRepair) return;
+    const broken = on === true && Analytics.configured() && !await Analytics.hasHost();
+    analyticsRepair.hidden = !broken;
+  }
+
+  const analyticsRepairBtn = document.getElementById('analyticsRepairBtn');
+  if (analyticsRepairBtn) {
+    analyticsRepairBtn.addEventListener('click', async () => {
+      // The click is the gesture Chrome requires, which is the whole reason
+      // this is a button and not something the service worker retries.
+      const granted = await Analytics.requestHost();
+      analyticsRepair.hidden = granted;
+      if (granted) Analytics.flush();
+    });
+  }
+
   function paintAnalyticsToggle(on) {
     analyticsToggle.classList.toggle('on', on);
     analyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+    paintAnalyticsRepair(on);
 
     // Shown only while reporting is on, so a deletion request can quote it.
     const row = document.getElementById('analyticsIdRow');
@@ -1594,12 +1651,17 @@ document.addEventListener('DOMContentLoaded', () => {
   Analytics.pingEnabled().then(paintPingToggle);
   pingToggle.addEventListener('click', async () => {
     const next = !pingToggle.classList.contains('on');
+    // Straight off the click, before anything is awaited -- the Worker cannot
+    // be reached at all until its origin is granted, and somebody who declined
+    // during setup is asked again here rather than left silently queueing.
+    if (next) await Analytics.requestHost();
     await Analytics.setPing(next);
     paintPingToggle(next);
   });
 
   analyticsToggle.addEventListener('click', async () => {
     const next = !analyticsToggle.classList.contains('on');
+    if (next) await Analytics.requestHost();   // before any await; see above
     await Analytics.setEnabled(next);
     paintAnalyticsToggle(next);          // after setEnabled, so the id exists
     // Recorded only when switching on — the off path must send nothing.

@@ -36,8 +36,13 @@ test('pick() caps field length', () => {
 });
 
 test('the endpoint is https and covered by a host permission', () => {
-  // A configured endpoint with no matching host_permission fails silently at
+  // A configured endpoint with no matching host permission fails silently at
   // runtime — the fetch is simply blocked — so the two must agree.
+  //
+  // Optional counts. Since 2.2.0 the Worker's origin lives in
+  // optional_host_permissions so that it stays out of Chrome's install
+  // dialog, and analytics.js asks for it at the point reporting is switched
+  // on. What must not happen is the endpoint appearing in neither list.
   const src = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
   const endpoint = /const ENDPOINT = '([^']*)'/.exec(src)[1];
   if (!endpoint) return;                       // unconfigured is valid too
@@ -46,9 +51,54 @@ test('the endpoint is https and covered by a host permission', () => {
   const manifest = JSON.parse(
     readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
   const host = new URL(endpoint).host;
-  const covered = manifest.host_permissions.some(p => p.includes(host));
-  assert.ok(covered,
-    `manifest has no host_permission for ${host}; every send would be blocked`);
+  const declared = [
+    ...(manifest.host_permissions || []),
+    ...(manifest.optional_host_permissions || []),
+  ];
+  assert.ok(declared.some(p => p.includes(host)),
+    `manifest declares ${host} in neither host_permissions nor `
+    + 'optional_host_permissions; every send would be blocked');
+});
+
+test('an optional origin is gated and asked for', () => {
+  // Declaring it optional is only half of it. If the origin is optional then
+  // every send has to check first — an ungranted fetch is blocked, and a
+  // caller that never asks leaves reporting permanently silent with no
+  // symptom the user could report.
+  const manifest = JSON.parse(
+    readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
+  if (!(manifest.optional_host_permissions || []).length) return;
+
+  const analytics = readFileSync(join(__dirname, '..', 'analytics.js'), 'utf8');
+  assert.match(analytics, /chrome\.permissions\.contains/,
+    'analytics.js must check the optional origin before sending');
+  assert.match(analytics, /chrome\.permissions\.request/,
+    'analytics.js must expose a way to ask for the optional origin');
+  assert.ok(!/await fetch\(/.test(analytics),
+    'every send must go through the permission gate, not raw fetch()');
+
+  const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+  assert.ok(/requestHost\(\)/.test(popup) || /permissions\.request/.test(popup),
+    'the popup must ask for the origin when reporting is switched on');
+});
+
+test('optional permissions are never assumed present', () => {
+  // chrome.notifications is undefined until the optional permission is
+  // granted, so a bare call throws and takes the rest of the handler with it.
+  const manifest = JSON.parse(
+    readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
+  if (!(manifest.optional_permissions || []).includes('notifications')) return;
+
+  const background = readFileSync(join(__dirname, '..', 'background.js'), 'utf8');
+  const bare = background.split('\n').filter(
+    line => /chrome\.notifications\.create\(/.test(line)
+      && !/if \(!chrome\.notifications/.test(line));
+  // The one inside notify() is guarded by the line above it; anything else is
+  // an unguarded call site.
+  assert.equal(bare.length, 1,
+    `expected notifications to be reached only through notify(); found ${bare.length}`);
+  assert.match(background, /function notify\(/,
+    'background.js must funnel notifications through a guarded helper');
 });
 
 test('consent is off until explicitly granted', () => {

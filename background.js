@@ -2119,7 +2119,7 @@ async function checkStreakReminder() {
   const hour = new Date().getHours();
   // Only remind in the evening (6 PM - 11 PM)
   if (hour >= 18 && hour <= 23) {
-    chrome.notifications.create('streakReminder', {
+    notify('streakReminder', {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: `🔥 Don't break your ${streak.currentStreak}-day streak!`,
@@ -2155,6 +2155,29 @@ const ACHIEVEMENT_DEFS = [
   { id: 'early_bird', emoji: '☀️', name: 'Early Bird', desc: 'Solve before 7 AM', check: (ctx) => ctx.hour >= 5 && ctx.hour < 7 },
   { id: 'bookworm', emoji: '📚', name: 'Bookworm', desc: 'Solve 5 in one day', check: (ctx) => ctx.todaySolved >= 5 },
 ];
+
+/**
+ * Announce something, if we are allowed to.
+ *
+ * From 2.2.0 `notifications` is an optional permission rather than a required
+ * one. It was costing a line in Chrome's install dialog -- "Display
+ * notifications", read by every stranger deciding whether to trust this --
+ * to support a feature that does nothing until somebody has earned an
+ * achievement or is about to break a streak. So it is asked for during setup
+ * instead, and until it is granted `chrome.notifications` is not defined at
+ * all, which is why this checks rather than assumes.
+ *
+ * A refusal costs the notification and nothing else: the achievement is still
+ * unlocked, the streak is still counted, and the popup still shows both.
+ */
+function notify(id, options) {
+  if (!chrome.notifications || !chrome.notifications.create) return;
+  try {
+    chrome.notifications.create(id, options);
+  } catch (error) {
+    // Granted then revoked mid-session; not worth surfacing.
+  }
+}
 
 /**
  * Re-derive what has been earned from what is stored, and unlock anything new.
@@ -2202,7 +2225,7 @@ async function checkAchievements({ notify = true } = {}) {
 
   // Notify for new achievements
   for (const ach of (notify ? newlyUnlocked : [])) {
-    chrome.notifications.create(`achievement_${ach.id}`, {
+    notify(`achievement_${ach.id}`, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: `🏆 Achievement Unlocked!`,

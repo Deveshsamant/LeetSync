@@ -46,6 +46,49 @@ const Analytics = (() => {
   const isWorker = typeof window === 'undefined';
   const configured = () => typeof ENDPOINT === 'string' && ENDPOINT.startsWith('https://');
 
+  // The Worker's origin, as a match pattern.
+  const ORIGIN = configured() ? ENDPOINT + '/*' : '';
+
+  /**
+   * Is the Worker's origin granted?
+   *
+   * It is an OPTIONAL host permission rather than a required one, and that is
+   * a deliberate trade. Chrome builds its install dialog from the manifest, so
+   * listing this host there means a stranger deciding whether to install is
+   * asked to approve a personal subdomain they have no way to evaluate --
+   * which reads as the least trustworthy line in the dialog and is the one
+   * thing in it that is not needed to make the extension work. Asking instead
+   * at the point somebody turns reporting on puts the question where the
+   * answer is informed.
+   */
+  function hasHost() {
+    if (!ORIGIN || !chrome.permissions) return Promise.resolve(false);
+    return new Promise(r => chrome.permissions.contains({ origins: [ORIGIN] }, r));
+  }
+
+  /**
+   * fetch(), refused when the origin has not been granted.
+   *
+   * Refusing by throwing is what keeps this to one code path: every caller
+   * already handles a network failure, because it already had to handle being
+   * offline, so an ungranted permission takes exactly the route a dropped
+   * connection takes. The queue survives either way.
+   */
+  async function reach(url, init) {
+    if (!await hasHost()) throw new Error('analytics host not granted');
+    return fetch(url, init);
+  }
+
+  /**
+   * Ask for it. Must be called straight out of a click -- Chrome only honours
+   * the request while the gesture that triggered it is still live, so nothing
+   * may be awaited before this.
+   */
+  function requestHost() {
+    if (!ORIGIN || !chrome.permissions) return Promise.resolve(false);
+    return new Promise(r => chrome.permissions.request({ origins: [ORIGIN] }, r));
+  }
+
   const local = (keys) => new Promise(r => chrome.storage.local.get(keys, d => r(d || {})));
   const setLocal = (obj) => new Promise(r => chrome.storage.local.set(obj, r));
 
@@ -92,7 +135,7 @@ const Analytics = (() => {
     // into a retry on every service-worker wake-up.
     await setLocal({ [PING_AT_KEY]: now });
     try {
-      const res = await fetch(ENDPOINT, {
+      const res = await reach(ENDPOINT, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -117,7 +160,7 @@ const Analytics = (() => {
   async function sendFeedback(kind, message) {
     if (!configured()) return { ok: false, reason: 'unconfigured' };
     try {
-      const res = await fetch(`${ENDPOINT}/feedback`, {
+      const res = await reach(`${ENDPOINT}/feedback`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -154,7 +197,7 @@ const Analytics = (() => {
     const url = id
       ? `${ENDPOINT}/announcement?installId=${encodeURIComponent(id)}`
       : `${ENDPOINT}/announcement`;
-    const res = await fetch(url);
+    const res = await reach(url);
     if (!res.ok) return [];
     const body = await res.json();
     if (body && Array.isArray(body.announcements)) return body.announcements;
@@ -197,7 +240,7 @@ const Analytics = (() => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (await isEnabled()) params.set('installId', await installId());
     try {
-      const res = await fetch(`${ENDPOINT}/leaderboard?${params}`);
+      const res = await reach(`${ENDPOINT}/leaderboard?${params}`);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -255,7 +298,7 @@ const Analytics = (() => {
       return { ok: true, name: wanted || null };
     }
     try {
-      const res = await fetch(`${ENDPOINT}/claim-name`, {
+      const res = await reach(`${ENDPOINT}/claim-name`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: wanted, installId: await installId() }),
@@ -352,7 +395,7 @@ const Analytics = (() => {
 
     const batch = queue.slice(0, BATCH);
     try {
-      const res = await fetch(ENDPOINT, {
+      const res = await reach(ENDPOINT, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ events: batch }),
@@ -388,7 +431,7 @@ const Analytics = (() => {
       context: isWorker ? 'service worker' : 'page',
     };
     try {
-      const res = await fetch(ENDPOINT, {
+      const res = await reach(ENDPOINT, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ events: [] }),
@@ -432,6 +475,7 @@ const Analytics = (() => {
   }
 
   return {
+    hasHost, requestHost, ORIGIN,
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
     leaderboard, announcements, sendFeedback,
