@@ -1556,16 +1556,29 @@ async function syncStatsFromGitHub(repo) {
       page++;
     }
 
-    // Extract unique solve dates from commits
-    const dateSet = new Set();
-    allCommits.forEach(c => {
-      if (c.commit?.message && !c.commit.message.startsWith('Merge')) {
-        const date = c.commit.author?.date || c.commit.committer?.date;
-        if (date) {
-          dateSet.add(date.split('T')[0]);
-        }
-      }
-    });
+    // A solve is a solution file being pushed, which LeetSync commits as
+    // "Add sol1: 15. 3Sum (Java)" or "Update sol2: ...". Every commit used to
+    // count, so the "Initial commit" GitHub writes when it creates the
+    // repository registered as one -- and a brand-new empty repo reported a
+    // one-day streak before anything had been solved. Notes, panels, deletes,
+    // renumbers, README index rewrites and device-state syncs are not solves
+    // either, and all of them were being counted.
+    const SOLVE_COMMIT = /^(?:Add|Update) sol\d+:/;
+    const dateOf = (c) =>
+      (c.commit.author?.date || c.commit.committer?.date || '').split('T')[0];
+
+    const usable = allCommits.filter(
+      c => c.commit?.message && !c.commit.message.startsWith('Merge'));
+    const solves = usable.filter(c => SOLVE_COMMIT.test(c.commit.message));
+
+    // Repos written by much older versions used different messages. Falling
+    // back to every commit keeps their history rather than silently wiping a
+    // streak -- but only where solutions actually exist, because an empty repo
+    // has nothing to have a streak about.
+    const source = solves.length ? solves
+      : (Object.keys(parsedProblems).length ? usable : []);
+
+    const dateSet = new Set(source.map(dateOf).filter(Boolean));
 
     solveHistory = Array.from(dateSet).sort();
 
@@ -1617,14 +1630,21 @@ async function syncStatsFromGitHub(repo) {
   const solvedCount = Object.keys(merged).length;
   const pushCount = Math.max(totalPushCount, local.pushCount || 0);
 
-  // Merge streak data
+  // Merge streak data.
+  //
+  // Nothing solved anywhere is not a streak of anything. The max below would
+  // otherwise keep a wrong value forever, since this is the only thing that
+  // recomputes it -- and a repository created with auto_init used to produce
+  // exactly that, a one-day streak, out of its own "Initial commit".
   const localStreak = local.streakData || {};
-  const mergedStreak = {
-    currentStreak: Math.max(currentStreak, localStreak.currentStreak || 0),
-    longestStreak: Math.max(longestStreak, localStreak.longestStreak || 0),
-    lastSolveDate: lastSolveDate || localStreak.lastSolveDate || null,
-    solveHistory: [...new Set([...solveHistory, ...(localStreak.solveHistory || [])])].sort(),
-  };
+  const mergedStreak = solvedCount === 0
+    ? { currentStreak: 0, longestStreak: 0, lastSolveDate: null, solveHistory: [] }
+    : {
+      currentStreak: Math.max(currentStreak, localStreak.currentStreak || 0),
+      longestStreak: Math.max(longestStreak, localStreak.longestStreak || 0),
+      lastSolveDate: lastSolveDate || localStreak.lastSolveDate || null,
+      solveHistory: [...new Set([...solveHistory, ...(localStreak.solveHistory || [])])].sort(),
+    };
 
   await chrome.storage.local.set({
     solvedProblems: merged,
