@@ -1653,6 +1653,14 @@ async function syncStatsFromGitHub(repo) {
     streakData: mergedStreak,
   });
 
+  // Achievements are not files in the repository, so nothing in the tree above
+  // brings them back -- signing out and restoring left somebody with 21 solved
+  // and 0 of 15 unlocked. They are derived from what is solved and how long the
+  // streak ran, so re-deriving here recovers every one of them that the
+  // restored data implies. Silently: fifteen at once is not fifteen
+  // notifications.
+  await checkAchievements({ notify: false });
+
   console.log(`[LeetSync] ✅ Full sync: ${solvedCount} problems, ${pushCount} pushes, ${currentStreak}-day streak, ${solveHistory.length} heatmap entries`);
 
   return { success: true, solvedCount, pushCount, currentStreak, longestStreak, heatmapDays: solveHistory.length };
@@ -1735,6 +1743,12 @@ async function writeLocalState(merged) {
   });
   await SheetProgress.save(new Set(applied.sheetTicks));
   await chrome.storage.local.set({ [SYNCED_SHEETS_KEY]: applied.sheetTicks });
+
+  // The merged document carries whatever the other machine had unlocked, but a
+  // machine that has never published one carries nothing -- so anything the
+  // merged solutions imply is filled in here rather than waiting for the next
+  // solve to notice.
+  await checkAchievements({ notify: false });
   return applied;
 }
 
@@ -2118,11 +2132,16 @@ async function checkStreakReminder() {
 // ── Achievement System ───────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 
+// Streak achievements test the longest streak, not the current one. Against
+// the current streak they were unwinnable in two ways: a run that ended before
+// the popup was next opened never registered, and a restore -- which knows the
+// longest streak perfectly well -- could never bring one back, because the
+// current streak straight after restoring is a day or none.
 const ACHIEVEMENT_DEFS = [
   { id: 'first_blood', emoji: '🩸', name: 'First Blood', desc: 'Solve your 1st problem', check: (ctx) => ctx.totalSolved >= 1 },
-  { id: 'on_fire', emoji: '🔥', name: 'On Fire', desc: '3-day solving streak', check: (ctx) => ctx.streak >= 3 },
-  { id: 'unstoppable', emoji: '⚡', name: 'Unstoppable', desc: '7-day solving streak', check: (ctx) => ctx.streak >= 7 },
-  { id: 'month_king', emoji: '👑', name: 'Month King', desc: '30-day solving streak', check: (ctx) => ctx.streak >= 30 },
+  { id: 'on_fire', emoji: '🔥', name: 'On Fire', desc: '3-day solving streak', check: (ctx) => ctx.longestStreak >= 3 },
+  { id: 'unstoppable', emoji: '⚡', name: 'Unstoppable', desc: '7-day solving streak', check: (ctx) => ctx.longestStreak >= 7 },
+  { id: 'month_king', emoji: '👑', name: 'Month King', desc: '30-day solving streak', check: (ctx) => ctx.longestStreak >= 30 },
   { id: 'deca', emoji: '🎯', name: 'Deca', desc: 'Solve 10 problems', check: (ctx) => ctx.totalSolved >= 10 },
   { id: 'quarter', emoji: '🏅', name: 'Quarter Century', desc: 'Solve 25 problems', check: (ctx) => ctx.totalSolved >= 25 },
   { id: 'half_century', emoji: '🥇', name: 'Half Century', desc: 'Solve 50 problems', check: (ctx) => ctx.totalSolved >= 50 },
@@ -2136,7 +2155,15 @@ const ACHIEVEMENT_DEFS = [
   { id: 'bookworm', emoji: '📚', name: 'Bookworm', desc: 'Solve 5 in one day', check: (ctx) => ctx.todaySolved >= 5 },
 ];
 
-async function checkAchievements() {
+/**
+ * Re-derive what has been earned from what is stored, and unlock anything new.
+ *
+ * Additive: nothing is ever taken away, so running it after a restore fills in
+ * everything the restored solutions and streak imply. `notify` is off for that
+ * case -- recovering fifteen achievements at once should not produce fifteen
+ * desktop notifications.
+ */
+async function checkAchievements({ notify = true } = {}) {
   const data = await chrome.storage.local.get(['achievements', 'solvedProblems', 'streakData']);
   const unlocked = data.achievements || {};
   const solved = data.solvedProblems || {};
@@ -2173,7 +2200,7 @@ async function checkAchievements() {
   await chrome.storage.local.set({ achievements: unlocked });
 
   // Notify for new achievements
-  for (const ach of newlyUnlocked) {
+  for (const ach of (notify ? newlyUnlocked : [])) {
     chrome.notifications.create(`achievement_${ach.id}`, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
