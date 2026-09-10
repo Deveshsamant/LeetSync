@@ -1,5 +1,5 @@
 {
-  "latestVersion": "2.0.1",
+  "latestVersion": "2.1.0",
   "maintenance": {
     "active": false,
     "message": "We're upgrading LeetSync! Be right back.",
@@ -61,7 +61,7 @@
       "📡 Offline queue for failed pushes",
       "📝 5 README themes for your GitHub repo"
     ],
-    "2.0.1": [
+    "2.1.0": [
       "Every submission is now recorded, not just the accepted ones — filter Solved by what took you several tries, or what you have not revisited",
       "Write notes on any problem; they go into that problem's page in your repo",
       "Pick a username when you connect GitHub, unique across LeetSync",
@@ -76,7 +76,12 @@
       "Fixed: runtime and memory were always blank on synced solutions",
       "Fixed: release notes could silently fail to appear after an update",
       "Send feedback, an issue or a suggestion from Settings — and get an answer back inside the extension, quoting what you wrote",
-      "The day streak now has its own tile and a flame, lit only while the run is alive"
+      "The day streak now has its own tile and a flame, lit only while the run is alive",
+      "Solutions are no longer pushed with their lines shuffled or cut short — the code now comes from the editor itself rather than from whatever the page had rendered",
+      "Study sheets are listed by what they are rather than by their authors, and a sheet opens at the section you were working in instead of the first one",
+      "Repo setup says what to do when GitHub refuses it, instead of pointing at a permission that would not have helped",
+      "Signing out no longer waits on an unreachable repository",
+      "Terms and conditions, linked from setup and from Settings"
     ]
   }
 }

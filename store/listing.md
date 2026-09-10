@@ -109,8 +109,10 @@ a separate switch that stays off even then. One activity ping — a random ID an
 the version, twice a day at most — is on by default, disclosed at setup, and
 has its own switch. It does not record which tab you opened or that you opened
 the popup. Your GitHub token, repository name and GitHub username are never
-collected. Full policy:
-https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md
+collected.
+
+Terms and conditions: https://leetsync-site.vercel.app/terms
+Privacy policy: https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md
 
 Open source: https://github.com/Deveshsamant/LeetSync
 Website: https://leetsync-site.vercel.app/
