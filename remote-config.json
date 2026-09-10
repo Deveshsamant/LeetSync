@@ -1,5 +1,5 @@
 {
-  "latestVersion": "2.1.0",
+  "latestVersion": "2.0.1",
   "maintenance": {
     "active": false,
     "message": "We're upgrading LeetSync! Be right back.",
@@ -61,7 +61,10 @@
       "📡 Offline queue for failed pushes",
       "📝 5 README themes for your GitHub repo"
     ],
-    "2.1.0": [
+    "2.2.0": [
+      "Installing LeetSync now asks for less — Chrome's prompt lists only LeetCode and GitHub. The reporting server and desktop notifications are requested when you switch them on, not before",
+      "Notifications are optional: decline them and achievements still unlock and streaks still count, they simply do not pop up",
+      "If an upgrade leaves reporting switched on without permission to send, Settings now says so and offers one button to fix it, instead of queueing in silence",
       "Every submission is now recorded, not just the accepted ones — filter Solved by what took you several tries, or what you have not revisited",
       "Write notes on any problem; they go into that problem's page in your repo",
       "Pick a username when you connect GitHub, unique across LeetSync",
@@ -82,11 +85,6 @@
       "Repo setup says what to do when GitHub refuses it, instead of pointing at a permission that would not have helped",
       "Signing out no longer waits on an unreachable repository",
       "Terms and conditions, linked from setup and from Settings"
-    ],
-    "2.2.0": [
-      "Installing LeetSync now asks for less — Chrome's prompt lists only LeetCode and GitHub. The reporting server and desktop notifications are requested when you switch them on, not before",
-      "Notifications are optional: decline them and achievements still unlock and streaks still count, they simply do not pop up",
-      "If an upgrade leaves reporting switched on without permission to send, Settings now says so and offers one button to fix it, instead of queueing in silence"
     ]
   }
 }
