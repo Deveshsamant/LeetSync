@@ -123,7 +123,10 @@ const stub = `
     GET_SYNC_STATUS:  { lastSync: Date.now() - 9 * 60000 },
     SYNC_DEVICES:     { success: true, pushed: true, problems: solved.length,
                         achievements: 7, sheetTicks: 8, streak: 3, days: 14 },
-    LOGOUT:           { success: true, published: true }
+    LOGOUT:           { success: true, published: true },
+    // Without this the wizard's name step always took the failure branch,
+    // which is how a token that never got saved reached a release.
+    CLAIM_NAME:       { ok: true }
   };
   window.chrome = {
     runtime: {
@@ -170,6 +173,11 @@ const stub = `
     delete store.githubToken;
     delete store.githubRepo;
     store.wizardStep = wantStep;
+    // ?named=1 is the returning user: a name already claimed on this machine,
+    // which is the branch that skips the claim entirely.
+    if (params.get('named') === '1') {
+      localStore.analyticsDisplayName = 'Devesh';
+    }
 
     // Drive the step directly rather than leaning on popup.js restoring it.
     // Restore deliberately refuses to land past step 3 without a token --

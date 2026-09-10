@@ -321,10 +321,19 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // One way out of this step, and it always saves the token first. Step 3
+    // reads it straight from storage, so a path that advances without writing
+    // it lands on "GitHub token not configured" -- which is what the shortcut
+    // below used to do, to exactly the returning users it exists to help.
+    const advance = async () => {
+      await new Promise(r => chrome.storage.sync.set({ githubToken: token }, r));
+      wizGoTo(3);
+    };
+
     // Already theirs, and already claimed by this install. Re-claiming it
     // would be a round trip to be told what is already true.
     if (knownName && name === knownName) {
-      wizGoTo(3);
+      await advance();
       return;
     }
 
@@ -353,8 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     nameError.textContent = '';
-    chrome.storage.sync.set({ githubToken: token });
-    wizGoTo(3);
+    await advance();
   });
 
   // Repo choice toggle

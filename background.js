@@ -2272,9 +2272,11 @@ const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/Deveshsamant/LeetSy
  */
 async function fetchRemoteConfig() {
   try {
-    const res = await fetch(REMOTE_CONFIG_URL + '?t=' + Date.now(), {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
+    // No Cache-Control header. It is not a CORS-safelisted request header, so
+    // sending it turns this into a preflighted request -- and
+    // raw.githubusercontent.com answers OPTIONS with 403, which blocked the
+    // fetch outright. The ?t= above already defeats the cache.
+    const res = await fetch(REMOTE_CONFIG_URL + '?t=' + Date.now());
     if (!res.ok) {
       console.log('[LeetSync] Remote config fetch failed:', res.status);
       return null;
