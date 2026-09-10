@@ -402,17 +402,25 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
 
 /* The token link and its "?" sit on one line; the help is a sheet rather than
    another paragraph, because the page it describes is on GitHub, not here. */
-.token-links { display: flex; align-items: center; gap: 10px; }
+/* The margin belongs to the row, not to the link inside it: .wizard-link
+   carries margin-top:14px, which grew the flex line and left the icon sitting
+   above the text it belongs to. */
+.token-links { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
+.token-links .wizard-link { margin-top: 0; }
 .token-help {
-  width: 20px;
-  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   flex: none;
   padding: 0;
   border: 1px solid var(--bd-ctrl);
   border-radius: 50%;
   background: transparent;
   color: var(--tx-3);
-  font-family: var(--f-label);
+  font-family: var(--f-head);
+  font-weight: 700;
   font-size: 11px;
   line-height: 1;
   cursor: pointer;

@@ -1612,7 +1612,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // was. It stopped being enough the moment a reply could outrank one.
   const DISMISSED_LEGACY = 'dismissedBroadcastId';
 
-  Analytics.announcements().then((notes) => {
+  // Nothing is broadcast to somebody who has not finished setting up. A fresh
+  // install opened the wizard with a message from the developer sitting on top
+  // of it, before there was a token, a repository, or any reason to care --
+  // and dismissing it there would have burned the one showing it ever gets.
+  const setupComplete = () => new Promise((resolve) => {
+    chrome.storage.sync.get(['githubToken', 'githubRepo'], (data) => {
+      resolve(Boolean(data && data.githubToken && data.githubRepo));
+    });
+  });
+
+  setupComplete()
+    .then((ready) => (ready ? Analytics.announcements() : []))
+    .then((notes) => {
     if (!notes.length) return;
     chrome.storage.local.get([DISMISSED_BROADCASTS, DISMISSED_LEGACY], (data) => {
       const seen = new Set(Array.isArray(data && data[DISMISSED_BROADCASTS])
