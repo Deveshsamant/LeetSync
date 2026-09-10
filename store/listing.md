@@ -4,6 +4,13 @@ Everything below is written to be pasted straight into the dashboard fields.
 Keep this file in step with `manifest.json`; a listing that disagrees with the
 package is the most common cause of a rejection.
 
+## Current package
+
+**2.2.0** — `store/dist/leetsync-2.2.0.zip`. The permission changes in it alter
+three fields on the Privacy tab, all marked below. `remote-config.json` still
+says `latestVersion: 2.1.0` on purpose: it drives the update prompt for existing
+users, so move it only once this build is approved.
+
 ## Rejected once — do not undo this
 
 Version 2.0.0 was rejected on 6 September 2026 for **keyword spam** (reference
@@ -96,19 +103,26 @@ what you wrote — not into an inbox you have to go and check.
 
 ─── YOUR TOKEN, YOUR REPO ───
 
-Works with a classic GitHub personal access token carrying the repo scope — the
-kind GitHub allows to create a repository, so setup finishes without leaving the
-extension. The token is held in Chrome storage and sent only to api.github.com.
-It is never transmitted anywhere else, and you can revoke it on GitHub at any
-time.
+A classic personal access token with the repo scope lets setup finish in one
+click, because GitHub allows that kind to create the repository for you. If your
+solutions repo already exists, a fine-grained token limited to that one
+repository works too and is the safer choice — setup reads which kind you pasted
+and only asks the questions that kind can answer.
+
+The token is held in Chrome storage and sent only to api.github.com. It is never
+transmitted anywhere else, and you can revoke it on GitHub at any time.
+
+Installing asks for two websites and nothing else: leetcode.com, to read your
+accepted solution, and api.github.com, to commit it. Notifications and the
+reporting server are requested later, only if you turn those on.
 
 ─── PRIVACY ───
 
 Usage reporting is optional. It is on unless you turn it off, you are shown the
 switch during setup, and Settings changes it at any time. It is also what puts
 your username and score on the public leaderboard; switch it off and you are not
-ranked. Sharing your solution code is
-a separate switch that stays off even then. One activity ping — a random ID and
+ranked. Sharing your solution code is a separate switch that stays off even
+then. One activity ping — a random ID and
 the version, twice a day at most — is on by default, disclosed at setup, and
 has its own switch. It does not record which tab you opened or that you opened
 the popup. Your GitHub token, repository name and GitHub username are never
@@ -141,6 +155,7 @@ English (United States) — matches the 67% of installs already on en-US.
 | Official URL | leave as None unless you verify the domain |
 | Homepage URL | `https://leetsync-site.vercel.app/` |
 | Support URL | `https://github.com/Deveshsamant/LeetSync/issues` |
+| YouTube video | the landscape cut, once it is public — a listing with a video shows a play button in search results, which nothing else on the card does |
 
 An empty Support URL is a visible gap on the listing page and gives a
 frustrated user nowhere to go but a one-star review.
@@ -160,9 +175,10 @@ Automatically sync accepted LeetCode solutions to a user's GitHub repository.
 Stores the user's GitHub token and repository name, theme choice, solved-problem records, streak and achievement progress, study-sheet ticks, and their rival list. All of it is held locally in Chrome storage.
 ```
 
-**notifications**
+**notifications** — declared in `optional_permissions`, so it does not appear
+in the install prompt. Chrome still asks you to justify it.
 ```
-Tells the user when a solution has been pushed to GitHub, and when a push failed so they know it has been queued for retry rather than lost.
+Announces an unlocked achievement, and reminds the user in the evening when a streak they have been building is about to lapse. It is an optional permission requested during setup rather than at install; if the user declines, achievements still unlock and streaks are still counted, they are simply not announced.
 ```
 
 **scripting**
@@ -175,10 +191,17 @@ Injects a content script into leetcode.com problem pages to detect the verdict o
 Drains the retry queue for pushes that failed while offline, checks the remote configuration for maintenance notices, sends any queued usage events for users who switched usage reporting on, and sends the twice-daily activity ping for users who have not switched that off.
 ```
 
-**Host permission** — the version you have does not mention the third host.
-The manifest declares three, and an undeclared one is a rejection risk:
+**Host permissions** — from 2.2.0 the manifest declares two as required and one
+as optional. Justify all three; an undeclared host is a rejection risk.
 ```
-leetcode.com — to detect accepted submissions and read the solution on the problem page. api.github.com — to commit the solution and README files to the user's own repository. leetsync-analytics.devsamant1744.workers.dev — the developer's own endpoint that receives anonymous usage events for users who have switched usage reporting on, and an activity ping (a random install ID and the extension version, at most twice a day) which is on by default, disclosed during setup, and has its own switch in Settings.
+leetcode.com — to detect accepted submissions and read the solution on the problem page. api.github.com — to commit the solution and README files to the user's own repository.
+```
+
+**Optional host permission** — `leetsync-analytics.devsamant1744.workers.dev`,
+declared in `optional_host_permissions` and requested during setup rather than
+at install:
+```
+The developer's own endpoint. It receives anonymous usage events for users who have switched usage reporting on, and an activity ping (a random install ID and the extension version, at most twice a day) which is on by default and has its own switch in Settings. It also serves two public reads that carry no identifier: the leaderboard shown in the Battle tab, and any message the developer broadcasts to users. It is an optional permission, requested at the point the user is shown the reporting switch during setup, so that installing the extension does not require granting it.
 ```
 
 **Remote code**: No, I am not using Remote code.

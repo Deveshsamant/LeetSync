@@ -1,6 +1,6 @@
 # Privacy Policy — LeetSync
 
-**Last updated:** September 5, 2026
+**Last updated:** September 10, 2026
 
 ## Summary
 
@@ -14,6 +14,25 @@ One thing is sent without that switch: an **activity ping** — a random ID and
 the extension version, at most twice a day, and nothing else. It is on by
 default, it is disclosed when you set the extension up, and it has its own
 switch in Settings. Turn it off and nothing leaves your browser at all.
+
+## Permission to reach our server is separate, and asked for separately
+
+From version 2.2.0, installing LeetSync does not grant it access to the
+reporting server at all. Chrome is only asked for two hosts at install —
+`leetcode.com` and `api.github.com` — because those are what the extension
+needs to read a solution and commit it.
+
+Access to `leetsync-analytics.devsamant1744.workers.dev` is an **optional**
+browser permission, requested during setup at the moment you are shown the
+reporting switch. Decline it and the browser itself blocks every request to
+that address, whatever the switches in Settings say. Two features that read
+from the same address stop working as a result: the public leaderboard in the
+Battle tab, and any message the developer broadcasts. The Battle tab says so
+and offers to ask again.
+
+Desktop notifications are optional in the same way. Decline them and
+achievements still unlock and streaks are still counted — they simply are not
+announced.
 
 ## Data stored in your repository
 
@@ -174,7 +193,9 @@ Settings to release it and go back to being identified only by a random ID.
   identifier and happen whatever your reporting setting is; as with any web
   request, the server sees that a request arrived. Your own leaderboard
   position is the one exception, and asking for it sends your install ID —
-  which only happens while usage reporting is on.
+  which only happens while usage reporting is on. From 2.2.0 none of these
+  requests can be made at all unless you granted the browser permission
+  described above.
 
 ## Data retention and removal
 

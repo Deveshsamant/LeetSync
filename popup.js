@@ -1874,6 +1874,28 @@ document.addEventListener('DOMContentLoaded', () => {
       empty.className = 'lb-empty';
       empty.textContent = 'Could not load the leaderboard.';
       lbList.appendChild(empty);
+
+      // The board is a plain read that sends no identifier, but it lives on
+      // the same origin as usage reporting -- and from 2.2.0 that origin is an
+      // optional permission. Somebody who declined it at setup would otherwise
+      // get a generic failure with nothing connecting it to a choice they made
+      // on another screen.
+      if (Analytics.configured()) {
+        Analytics.hasHost().then((granted) => {
+          if (granted) return;
+          empty.textContent = 'The leaderboard is served by the LeetSync '
+            + 'server, which this browser has not been given access to.';
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-secondary';
+          btn.type = 'button';
+          btn.style.marginTop = '10px';
+          btn.textContent = 'Grant access';
+          btn.addEventListener('click', async () => {
+            if (await Analytics.requestHost()) loadBoard();
+          });
+          empty.appendChild(btn);
+        });
+      }
       return;
     }
 
@@ -1920,10 +1942,13 @@ document.addEventListener('DOMContentLoaded', () => {
     paintBoard();
   });
 
-  Analytics.leaderboard(10).then((data) => {
-    boardData = data;
-    paintBoard();
-  });
+  function loadBoard() {
+    Analytics.leaderboard(10).then((data) => {
+      boardData = data;
+      paintBoard();
+    });
+  }
+  loadBoard();
 
   // ═══════════════════════════════════════════════════════════
   // SAY SOMETHING
