@@ -145,7 +145,13 @@ async function githubAPI(endpoint, options = {}) {
       throw new Error(`GitHub rate limit reached.${when}`);
     }
     if (response.status === 403) {
-      throw new Error(`GitHub refused the request (403). Check the token has Contents: Read and write on this repository. ${errorMsg}`);
+      // Creating a repository is not a repository permission, so the usual
+      // advice would send someone to a setting that could not have fixed it.
+      // ensureRepo turns this one into something actionable.
+      const creating = endpoint === '/user/repos' && options.method === 'POST';
+      throw new Error(creating
+        ? `GitHub refused to create the repository (403). ${errorMsg}`
+        : `GitHub refused the request (403). Check the token has Contents: Read and write on this repository. ${errorMsg}`);
     }
     throw new Error(`GitHub API error (${response.status}): ${errorMsg}`);
   }
@@ -844,8 +850,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Create a new GitHub repo
+  // Through ensureRepo rather than straight to creation: "Create new" against
+  // a name that already exists used to fail with a 422 the user could do
+  // nothing about, when adopting it is plainly what they wanted.
   if (message.type === 'CREATE_REPO') {
-    createGitHubRepo(message.repoName, message.isPrivate)
+    ensureRepo(message.repoName, message.isPrivate)
       .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
@@ -2153,7 +2162,33 @@ async function ensureRepo(requestedName, isPrivate = false) {
     };
   }
 
-  const created = await createGitHubRepo(repoName, isPrivate);
+  // Absent, so create it -- unless the token is not allowed to, which is the
+  // usual outcome and produced a 403 telling people to check a repository
+  // permission that would not have helped. A fine-grained token has no
+  // permission to create repositories at all; only a classic one with `repo`
+  // scope does.
+  //
+  // The 404 above is also ambiguous for a fine-grained token: GitHub answers
+  // 404, not 403, for a repository the token was simply not given access to.
+  // So the repo may well exist. Both ways out are named.
+  let created;
+  try {
+    created = await createGitHubRepo(repoName, isPrivate);
+  } catch (error) {
+    if (error.message.includes('403')) {
+      return {
+        success: false,
+        error: `${fullName} is not visible to this token, and the token cannot `
+          + `create it — fine-grained tokens are not allowed to create `
+          + `repositories. Either create ${repoName} at github.com/new and give `
+          + `the token Contents: Read and write on it, then press this again `
+          + `and LeetSync will adopt it; or use a classic token with repo `
+          + `scope. If ${fullName} already exists, add it to the token's `
+          + `Repository access.`,
+      };
+    }
+    throw error;
+  }
   await chrome.storage.sync.set({ githubRepo: created.fullName });
   return { ...created, created: true };
 }

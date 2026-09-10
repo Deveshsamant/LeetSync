@@ -317,17 +317,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // Repo choice toggle
   const radioExisting = document.getElementById('radioExisting');
   const radioCreate   = document.getElementById('radioCreate');
+  // Switching choice clears the last failure. It belonged to the other one,
+  // and leaving it up made an untouched field look like it had already been
+  // tried and refused.
+  const clearRepoError = () => {
+    document.getElementById('wizError').style.display = 'none';
+  };
   radioExisting.addEventListener('click', () => {
     radioExisting.classList.add('active');
     radioCreate.classList.remove('active');
     document.getElementById('existingRepoGroup').style.display = 'block';
     document.getElementById('createRepoGroup').style.display = 'none';
+    clearRepoError();
   });
   radioCreate.addEventListener('click', () => {
     radioCreate.classList.add('active');
     radioExisting.classList.remove('active');
     document.getElementById('existingRepoGroup').style.display = 'none';
     document.getElementById('createRepoGroup').style.display = 'block';
+    clearRepoError();
   });
 
   document.getElementById('wizNext3').addEventListener('click', async () => {
