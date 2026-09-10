@@ -1838,16 +1838,42 @@ async function logout() {
     }
   }
 
-  await new Promise(r => chrome.storage.sync.remove(['githubToken', 'githubRepo'], r));
-  await new Promise(r => chrome.storage.local.remove(
+  // Signing out is the token going away. Everything after that is this
+  // machine's cache of progress that already lives in the repository, and none
+  // of it is allowed to fail the sign out -- SheetProgress.save writes a chunk
+  // per page into chrome.storage.sync, which has a per-minute write quota and
+  // throws once it is hit. That threw straight out of here and the popup said
+  // "Could not sign out. Try again." while the token sat there untouched.
+  const leftovers = [];
+  const forget = async (label, run) => {
+    try {
+      await run();
+    } catch (error) {
+      console.warn('[LeetSync] sign out: could not clear', label, error);
+      leftovers.push(label);
+    }
+  };
+
+  // The one that has to work. If the credentials survive, nothing was signed
+  // out and saying otherwise would be a lie.
+  try {
+    await new Promise((resolve, reject) => chrome.storage.sync.remove(
+      ['githubToken', 'githubRepo'],
+      () => (chrome.runtime.lastError
+        ? reject(new Error(chrome.runtime.lastError.message)) : resolve())));
+  } catch (error) {
+    return { success: false, error: `Could not clear the token: ${error.message}` };
+  }
+
+  await forget('progress', () => new Promise(r => chrome.storage.local.remove(
     ['solvedProblems', 'streakData', 'achievements', 'pushCount', 'lastPush',
-     LAST_SYNC_KEY, SYNCED_SHEETS_KEY], r));
-  await SheetProgress.save(new Set());
+     LAST_SYNC_KEY, SYNCED_SHEETS_KEY], r)));
+  await forget('sheet ticks', () => SheetProgress.save(new Set()));
 
   // `connected` so the popup can tell "we could not publish your progress"
   // apart from "there was no progress to publish", which are very different
   // things to read after pressing sign out.
-  return { success: true, published, warning, connected };
+  return { success: true, published, warning, connected, leftovers };
 }
 
 // ── Auto Re-injection on Extension Load ──────────────────────
