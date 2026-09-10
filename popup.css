@@ -1307,13 +1307,19 @@ body.theme-light .token-display { border-width: 2px; }
 .wizard-step.active { display: flex; }
 
 /* Content centres in the free space; the step's own actions pin to its base */
+/* `safe` matters more than it looks. A centred flex container whose content
+   overflows spills in both directions, and the part above the top edge cannot
+   be scrolled to -- scrollTop does not go negative. So on any screen where the
+   step did not quite fit, the heading was simply gone. `safe center` centres
+   while there is room and falls back to the start when there is not. */
 .wizard-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   overflow-y: auto;
   min-height: 0;
+  padding: 2px 0 4px;
 }
 .wizard-actions {
   flex-shrink: 0;
