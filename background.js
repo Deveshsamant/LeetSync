@@ -2226,13 +2226,11 @@ async function ensureRepo(requestedName, isPrivate = false) {
     if (error.message.includes('403')) {
       return {
         success: false,
+        // "cannot create it" is what the popup matches on to offer the
+        // hand-off, so it stays in the sentence.
         error: `${fullName} is not visible to this token, and the token cannot `
-          + `create it — fine-grained tokens are not allowed to create `
-          + `repositories. Either create ${repoName} at github.com/new and give `
-          + `the token Contents: Read and write on it, then press this again `
-          + `and LeetSync will adopt it; or use a classic token with repo `
-          + `scope. If ${fullName} already exists, add it to the token's `
-          + `Repository access.`,
+          + `create it — GitHub only lets classic tokens do that. Make it below, `
+          + `or add it to this token's Repository access if it already exists.`,
       };
     }
     throw error;

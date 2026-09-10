@@ -258,6 +258,29 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizNext4').addEventListener('click', () =>
     finishConsent(wizAnalyticsToggle.classList.contains('on')));
 
+  // Somebody who already has a username is not asked for one again. It is
+  // kept in local storage and survives signing out, so re-running setup on the
+  // same machine should not re-interrogate them.
+  const wizNameKnown = document.getElementById('wizNameKnown');
+  const wizNameGroup = document.getElementById('wizNameGroup');
+  let knownName = null;
+
+  Analytics.displayName().then((name) => {
+    if (!name) return;
+    knownName = name;
+    document.getElementById('wizName').value = name;
+    document.getElementById('wizKnownName').textContent = name;
+    wizNameKnown.style.display = 'flex';
+    wizNameGroup.style.display = 'none';
+  });
+
+  document.getElementById('wizChangeName').addEventListener('click', () => {
+    wizNameKnown.style.display = 'none';
+    wizNameGroup.style.display = 'block';
+    document.getElementById('wizName').focus();
+  });
+
+  document.getElementById('wizBack4').addEventListener('click', () => wizGoTo(3));
   document.getElementById('wizStart').addEventListener('click', () => wizGoTo(2));
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));
   document.getElementById('wizBack3').addEventListener('click', () => wizGoTo(2));
@@ -283,6 +306,13 @@ document.addEventListener('DOMContentLoaded', () => {
       nameInput.style.borderColor = 'var(--error)';
       nameError.textContent = 'Pick a username to continue.';
       nameError.style.display = 'block';
+      return;
+    }
+
+    // Already theirs, and already claimed by this install. Re-claiming it
+    // would be a round trip to be told what is already true.
+    if (knownName && name === knownName) {
+      wizGoTo(3);
       return;
     }
 
@@ -323,6 +353,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // tried and refused.
   const clearRepoError = () => {
     document.getElementById('wizError').style.display = 'none';
+    const offer = document.getElementById('wizMakeRepo');
+    if (offer) offer.style.display = 'none';
   };
   radioExisting.addEventListener('click', () => {
     radioExisting.classList.add('active');
@@ -356,6 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chrome.runtime.lastError || !res?.success) {
           wizError.textContent = res?.error || 'Failed to create repo';
           wizError.style.display = 'block';
+          offerHandoff(res?.error);
           btn.disabled = false;
           btn.textContent = 'Finish Setup ✨';
           return;
@@ -2005,9 +2038,46 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   });
 
+  // GitHub's create endpoint takes classic and OAuth tokens only, so a
+  // fine-grained token always fails here. That is not a dead end: the new-repo
+  // page takes the name in the query string, and once it exists the ordinary
+  // lookup adopts it.
+  const wizMakeRepo = document.getElementById('wizMakeRepo');
+  const offerHandoff = (message) => {
+    wizMakeRepo.style.display = /cannot create it/.test(message || '') ? 'block' : 'none';
+  };
+
+  document.getElementById('wizOpenGitHub').addEventListener('click', () => {
+    const name = (document.getElementById('wizNewRepoName').value.trim()
+      || 'leetcode-solutions').replace(/[^A-Za-z0-9._-]/g, '-');
+    chrome.tabs.create({
+      url: `https://github.com/new?name=${encodeURIComponent(name)}`,
+    });
+  });
+
+  document.getElementById('wizRecheck').addEventListener('click', (event) => {
+    const wizError = document.getElementById('wizError');
+    wizError.style.display = 'none';
+    runRepoSetup(event.currentTarget, 'I\u2019ve created it \u2014 use it',
+      { repoName: document.getElementById('wizNewRepoName').value.trim() },
+      (res, err) => {
+        if (err) {
+          wizError.textContent = err;
+          wizError.style.display = 'block';
+          offerHandoff(err);
+          return;
+        }
+        wizMakeRepo.style.display = 'none';
+        document.getElementById('wizRepoLink').innerHTML =
+          `<a href="${res.url}" target="_blank" style="color:var(--ac);font-size:13px;">${res.fullName}</a>`;
+        wizGoTo(4);
+      });
+  });
+
   document.getElementById('wizAutoRepo').addEventListener('click', (event) => {
     const wizError = document.getElementById('wizError');
     wizError.style.display = 'none';
+    wizMakeRepo.style.display = 'none';
     runRepoSetup(event.currentTarget, 'Set up automatically from my token',
       {
         repoName: document.getElementById('wizRepo').value.trim(),
@@ -2017,6 +2087,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (err) {
           wizError.textContent = err;
           wizError.style.display = 'block';
+          offerHandoff(err);
           return;
         }
         document.getElementById('wizRepoLink').innerHTML =

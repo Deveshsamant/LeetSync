@@ -39,16 +39,22 @@
         <div class="wizard-body">
           <div class="sec-label">AUTHENTICATION</div>
           <h2>GitHub token</h2>
-          <p class="wizard-desc">A fine-grained token limited to your solutions repo is enough — grant it <strong>Contents: Read and write</strong>, nothing else.</p>
+          <p class="wizard-desc">A fine-grained token limited to your solutions repo is enough — grant it <strong>Contents: Read and write</strong>, nothing else. It is the safer of the two, and the only thing it cannot do is create the repository, which takes one click on GitHub.</p>
           <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" class="wizard-link">Create fine-grained token →</a>
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link" style="color:var(--tx-4);margin-top:6px;">Or a classic token with repo scope →</a>
+          <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link" style="margin-top:6px;">Or a classic token →</a>
+          <div class="form-hint" style="margin-top:6px;">A classic token can make the repository for you, but its <code>repo</code> scope reaches every private repository you own — not just this one.</div>
           <div class="form-group" style="margin-top:16px;">
             <input type="password" id="wizToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
           </div>
 
-          <div class="form-group" style="margin-top:14px;">
+          <div class="wizard-known" id="wizNameKnown" style="display:none;">
+            <span>Continuing as <strong id="wizKnownName"></strong></span>
+            <button type="button" id="wizChangeName">Change</button>
+          </div>
+
+          <div class="form-group" id="wizNameGroup" style="margin-top:14px;">
             <label class="form-label" for="wizName">Username</label>
-            <input type="text" id="wizName" maxlength="24"
+            <input type="text" id="wizName" maxlength="24" placeholder="John"
                    autocomplete="off" spellcheck="false" />
             <div class="form-hint" style="margin-top:6px;">
               3–24 characters, and unique across LeetSync users — checking that
@@ -99,6 +105,19 @@
             <div class="form-hint" style="margin-top:8px;">Creating a repo needs a classic <code>repo</code> token. With a fine-grained token, make the repo on GitHub first and choose "Use existing".</div>
           </div>
           <div id="wizError" class="status-message status-error" style="display:none;margin-top:12px;"></div>
+          <!-- Shown only when the token cannot create the repository, which is
+               every fine-grained token: GitHub's create endpoint takes classic
+               and OAuth tokens only. Rather than tell someone to go and do it,
+               open the page with the name already filled in and adopt what
+               comes back. -->
+          <div id="wizMakeRepo" style="display:none;margin-top:10px;">
+            <button class="btn btn-primary" id="wizOpenGitHub" style="width:100%;">
+              Create it on GitHub &#8599;
+            </button>
+            <button class="btn btn-secondary" id="wizRecheck" style="width:100%;margin-top:8px;">
+              I&rsquo;ve created it &mdash; use it
+            </button>
+          </div>
         </div>
         <div class="wizard-actions">
           <div class="wizard-nav">
@@ -140,6 +159,12 @@
             </button>
           </div>
 
+          <!-- Folded by default. Every line of it was on screen at once,
+               which pushed the links and the buttons past the bottom of a
+               600px popup at anything but 100% zoom. The switches and what
+               each one does stay visible; the itemised list is one tap. -->
+          <details class="disclose-wrap">
+            <summary>What exactly is shared</summary>
           <dl class="disclose">
             <dt>SENT</dt>
             <dd>Your username, the version, your themes, your sheet progress, and
@@ -152,6 +177,7 @@
             <dd>Your token, your repository, your solution code, which tab you
               opened, or that you opened the popup at all.</dd>
           </dl>
+          </details>
 
           <div class="consent-links">
             <a href="https://leetsync-site.vercel.app/terms" target="_blank" rel="noopener noreferrer">Terms and conditions ↗</a>
@@ -159,7 +185,10 @@
           </div>
         </div>
         <div class="wizard-actions">
-          <button class="btn btn-primary" id="wizNext4">Continue →</button>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" id="wizBack4">← Back</button>
+            <button class="btn btn-primary" id="wizNext4">Continue →</button>
+          </div>
         </div>
       </div>
 
@@ -604,7 +633,7 @@
           <div class="form-group" id="displayNameRow" style="margin-top:12px;">
             <label class="form-label" for="displayName">Username</label>
             <input type="text" id="displayName" class="form-input" maxlength="24"
-                   autocomplete="off" spellcheck="false">
+                   placeholder="John" autocomplete="off" spellcheck="false">
             <div class="form-hint" style="margin-top:6px;">
               The name you chose at setup. It labels your usage data instead of a
               random ID, and is unique across LeetSync users — changing it checks
