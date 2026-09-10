@@ -22,3 +22,7 @@ preview-popup.html
 preview-tracker.html
 store/dist/
 store/ad/
+
+# Python bytecode from the store scripts
+__pycache__/
+*.pyc
