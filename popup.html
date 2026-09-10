@@ -39,16 +39,21 @@
         <div class="wizard-body">
           <div class="sec-label">AUTHENTICATION</div>
           <h2>GitHub token</h2>
-          <p class="wizard-desc">LeetSync uses a classic personal access token with
-            the <code>repo</code> scope. That is the one GitHub lets create the
-            repository for you, so setup finishes in a click.</p>
+          <p class="wizard-desc">A classic token with the <code>repo</code> scope
+            lets LeetSync create the repository for you, so setup finishes in a
+            click. If your solutions repo already exists, a fine-grained token
+            limited to it is the safer choice.</p>
           <div class="token-links">
             <a href="https://github.com/settings/tokens/new?scopes=repo&description=LeetSync" target="_blank" class="wizard-link">Create classic token →</a>
             <button type="button" class="token-help" id="tokenHelpOpen"
-                    aria-label="How to make a good classic token">i</button>
+                    aria-label="How to make a good token">i</button>
           </div>
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" class="wizard-link"
+             style="margin-top:6px;color:var(--tx-3);">Repo already exists? Fine-grained token →</a>
           <div class="form-group" style="margin-top:16px;">
-            <input type="password" id="wizToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+            <input type="password" id="wizToken" placeholder="ghp_… or github_pat_…" autocomplete="off" spellcheck="false" />
+            <!-- GitHub prefixes both kinds, so this needs no request. -->
+            <div class="form-hint" id="wizTokenKind" style="display:none;margin-top:7px;"></div>
           </div>
 
           <div class="wizard-known" id="wizNameKnown" style="display:none;">
@@ -86,8 +91,8 @@
             Set up automatically from my token
           </button>
           <div class="wizard-hint" id="wizAutoHint">Finds <strong>leetcode-solutions</strong> on your account, or creates it.</div>
-          <div class="wizard-or">or choose yourself</div>
-          <div class="wizard-repo-options">
+          <div class="wizard-or" id="wizOrChoose">or choose yourself</div>
+          <div class="wizard-repo-options" id="wizRepoOptions">
             <label class="wizard-radio active" id="radioExisting">
               <input type="radio" name="repoChoice" value="existing" checked>
               <span>Use existing</span>
@@ -855,6 +860,7 @@
 
 
   <script src="sheet-progress.js"></script>
+  <script src="token-kind.js"></script>
   <script src="analytics.js"></script>
   <script src="popup.js"></script>
 </body>

@@ -10,7 +10,8 @@
 // Pure README/SVG generation lives in readme.js (unit tested in test/).
 // importScripts runs synchronously and shares this global scope, so the
 // generators are available to every function below.
-importScripts('readme.js', 'analytics.js', 'sheet-progress.js', 'device-sync.js');
+importScripts('readme.js', 'analytics.js', 'sheet-progress.js', 'device-sync.js',
+              'token-kind.js');
 
 // ── Base64 Encoding (Unicode-safe) ───────────────────────────
 
@@ -2257,6 +2258,20 @@ async function ensureRepo(requestedName, isPrivate = false) {
     return {
       success: false,
       error: `${fullName} does not exist, and this token can only create repositories under ${login}.`,
+    };
+  }
+
+  // Not there. A fine-grained token cannot create one, and GitHub answers the
+  // attempt with a 403, so the round trip is skipped and the same hand-off is
+  // offered straight away.
+  const { githubToken } = await new Promise(
+    r => chrome.storage.sync.get(['githubToken'], r));
+  if (!TokenKind.canCreateRepo(githubToken)) {
+    return {
+      success: false,
+      error: `${fullName} is not visible to this token, and the token cannot `
+        + `create it — GitHub only lets classic tokens do that. Make it below, `
+        + `or add it to this token's Repository access if it already exists.`,
     };
   }
 

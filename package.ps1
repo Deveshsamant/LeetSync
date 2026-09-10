@@ -22,7 +22,8 @@ $files = @(
   'background.js',
   'readme.js',        # loaded by background.js via importScripts
   'analytics.js',     # loaded by background.js via importScripts
-  'device-sync.js',   # loaded by background.js via importScripts
+  'device-sync.js',
+  'token-kind.js',    # loaded by the worker and by the popup
   'content.js',
   'injected.js',
   'utils.js',

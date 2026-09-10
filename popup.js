@@ -205,6 +205,49 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   let wizCurrentStep = 1;
 
+  /**
+   * Shape the repository step around what the token is allowed to do.
+   *
+   * A classic token can find or create the repo on its own, so there is
+   * nothing to ask: the automatic button is the whole step. A fine-grained one
+   * cannot create anything, so "Create new" is an offer GitHub will refuse --
+   * it is not shown, and the existing-repo field is all that remains. An
+   * unrecognised token keeps both, because guessing wrong must not lock
+   * somebody out of their own repository.
+   */
+  function adaptRepoStep() {
+    const kind = TokenKind.of(document.getElementById('wizToken').value);
+    const canCreate = kind !== 'fine-grained';
+    const known = kind !== 'unknown';
+
+    const show = (id, on) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = on ? '' : 'none';
+    };
+
+    // Classic: nothing to choose. Fine-grained: one thing to choose.
+    show('wizOrChoose', !canCreate || !known);
+    show('wizRepoOptions', !known);
+    show('existingRepoGroup', !canCreate || !known);
+    show('createRepoGroup', false);
+
+    if (known && !canCreate) {
+      // The radios are hidden, so the state they carried has to be set here.
+      // By id rather than the consts below, because this runs from the token
+      // field too -- which exists before they are declared.
+      document.getElementById('radioExisting')?.classList.add('active');
+      document.getElementById('radioCreate')?.classList.remove('active');
+    }
+
+    const hint = document.getElementById('wizAutoHint');
+    if (hint) {
+      hint.innerHTML = canCreate
+        ? 'Finds <strong>leetcode-solutions</strong> on your account, or creates it.'
+        : 'Finds <strong>leetcode-solutions</strong> on your account. A fine-grained '
+          + 'token cannot create one, so make it on GitHub first if it is not there.';
+    }
+  }
+
   function wizGoTo(step) {
     wizCurrentStep = step;
     chrome.storage.sync.set({ wizardStep: step });
@@ -220,6 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById(`wizStep${step}`).classList.add('active');
+    if (step === 3) adaptRepoStep();
 
     // The counter was static markup and never moved past "STEP 1 / 4".
     const counter = document.querySelector('.wizard-step-count');
@@ -286,6 +330,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizStart').addEventListener('click', () => wizGoTo(2));
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));
   document.getElementById('wizBack3').addEventListener('click', () => wizGoTo(2));
+
+  // The kind is in the prefix, so this is instant and needs no request.
+  const wizTokenInput = document.getElementById('wizToken');
+  const wizTokenKind = document.getElementById('wizTokenKind');
+  const paintTokenKind = () => {
+    const note = TokenKind.describe(wizTokenInput.value);
+    wizTokenKind.textContent = note ? note.text : '';
+    wizTokenKind.style.display = note ? 'block' : 'none';
+    // Step 3 is shaped by the same answer, so it is reshaped here rather than
+    // only when it is opened.
+    adaptRepoStep();
+  };
+  wizTokenInput.addEventListener('input', paintTokenKind);
 
   const tokenHelpModal = document.getElementById('tokenHelpModal');
   document.getElementById('tokenHelpOpen').addEventListener('click', () => {
@@ -397,6 +454,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('wizNext3');
     btn.disabled = true;
     btn.textContent = 'Setting up...';
+
+    // Nothing was offered to choose, so there is nothing to validate: for a
+    // token that can create its own repository the automatic path is the whole
+    // step, and "Finish setup" should do it rather than ask for a name that is
+    // not on screen.
+    const options = document.getElementById('wizRepoOptions');
+    if (options && getComputedStyle(options).display === 'none'
+        && getComputedStyle(document.getElementById('existingRepoGroup')).display === 'none') {
+      btn.disabled = false;
+      btn.textContent = 'Finish setup';
+      document.getElementById('wizAutoRepo').click();
+      return;
+    }
 
     const isCreate = radioCreate.classList.contains('active');
 
