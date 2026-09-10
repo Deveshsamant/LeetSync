@@ -252,10 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
     wizGoTo(5);
   }
 
+  // Whatever the switch says when Continue is pressed. It starts on, and
+  // turning it off is the decline -- there is no separate button for that any
+  // more, because one beside an already-on switch contradicted it.
   document.getElementById('wizNext4').addEventListener('click', () =>
     finishConsent(wizAnalyticsToggle.classList.contains('on')));
-  document.getElementById('wizSkipAnalytics').addEventListener('click', () =>
-    finishConsent(false));
 
   document.getElementById('wizStart').addEventListener('click', () => wizGoTo(2));
   document.getElementById('wizBack2').addEventListener('click', () => wizGoTo(1));

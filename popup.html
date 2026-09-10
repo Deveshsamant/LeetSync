@@ -111,65 +111,55 @@
       <!-- Step 4: Usage reporting -->
       <div class="wizard-step" id="wizStep4">
         <div class="wizard-body">
-          <div class="sec-label">OPTIONAL · UNLOCKS FEATURES</div>
+          <div class="sec-label">OPTIONAL</div>
           <h2>Compete, and steer what gets built</h2>
-          <p class="wizard-desc">Setup is done and everything already works. Sharing
-            usage data is what turns on the parts that need other people in them,
-            and what makes the next version follow what people actually use rather
-            than guesses. Your choice, either way.</p>
+          <p class="wizard-desc">Setup is done. Both are on — turn either off
+            here or in Settings, any time.</p>
 
-          <div class="form-hint" style="margin:2px 0 10px;">
-            <strong>What it turns on:</strong> your place on the public leaderboard
-            — all time, this week and today — ranked under the username you chose,
-            with your own position shown whether or not you make the top ten. And a
-            say in what gets built next, because what gets used is what gets worked
-            on.
-          </div>
-
-          <div class="set-row" style="border-top:0;padding:10px 0;margin-top:6px;">
-            <span>Share usage data</span>
-            <button class="toggle-track" id="wizAnalyticsToggle" type="button"
-                    role="switch" aria-checked="false" aria-label="Share usage data">
+          <div class="consent-row">
+            <div class="consent-text">
+              <span class="consent-label">Share usage data</span>
+              <span class="consent-note">Ranks you on the public leaderboard, and
+                decides what gets built next.</span>
+            </div>
+            <button class="toggle-track on" id="wizAnalyticsToggle" type="button"
+                    role="switch" aria-checked="true" aria-label="Share usage data">
               <span class="toggle-knob"></span>
             </button>
           </div>
 
-          <div class="set-row" style="padding:10px 0;">
-            <span>Count me as an active user</span>
+          <div class="consent-row">
+            <div class="consent-text">
+              <span class="consent-label">Count me as an active user</span>
+              <span class="consent-note">A random ID and the version, twice a day at
+                most. Nothing else.</span>
+            </div>
             <button class="toggle-track on" id="wizPingToggle" type="button"
                     role="switch" aria-checked="true" aria-label="Count me as an active user">
               <span class="toggle-knob"></span>
             </button>
           </div>
 
-          <div class="form-hint">
-            If you turn the first one on: your username, the extension version,
-            your theme, your README theme, which study sheets you use and how
-            far through them you are, and every submission result — problem,
-            difficulty, language, verdict, runtime and memory. Not which tab
-            you opened, and not that you opened the popup at all. It also
-            enters you on the public leaderboard, where your username and score
-            are visible to every other LeetSync user.
-            <br><br>
-            The second is on by default and is all that is sent if you leave
-            the first off: a random ID and the version, at most twice a day.
-            Switch it off and nothing leaves your browser.
-            <br><br>
-            Never, either way: your GitHub token, your repository, or your
-            solution code. Sharing code is a separate switch in Settings and
-            stays off. You can change all of this any time.
-            <br><br>
+          <dl class="disclose">
+            <dt>SENT</dt>
+            <dd>Your username, the version, your themes, your sheet progress, and
+              every submission result — problem, difficulty, language, verdict,
+              runtime, memory.</dd>
+            <dt>PUBLIC</dt>
+            <dd>Your username and score, on the leaderboard every LeetSync user
+              can see.</dd>
+            <dt>NEVER</dt>
+            <dd>Your token, your repository, your solution code, which tab you
+              opened, or that you opened the popup at all.</dd>
+          </dl>
+
+          <div class="consent-links">
             <a href="https://leetsync-site.vercel.app/terms" target="_blank" rel="noopener noreferrer">Terms and conditions ↗</a>
-            &nbsp;&middot;&nbsp;
-            <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md"
-               target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
+            <a href="https://github.com/Deveshsamant/LeetSync/blob/main/PRIVACY_POLICY.md" target="_blank" rel="noopener noreferrer">Privacy policy ↗</a>
           </div>
         </div>
         <div class="wizard-actions">
-          <div class="wizard-nav">
-            <button class="btn btn-ghost" id="wizSkipAnalytics">Not now</button>
-            <button class="btn btn-primary" id="wizNext4">Continue →</button>
-          </div>
+          <button class="btn btn-primary" id="wizNext4">Continue →</button>
         </div>
       </div>
 
@@ -566,9 +556,9 @@
             </button>
           </div>
           <div class="form-hint" style="margin-top:8px;">
-            Off unless you turn it on. Turning it on is what ranks you on the
-            public leaderboard in the Battle tab; leave it off and you are not
-            ranked. When on, LeetSync sends a random ID, the
+            On unless you turn it off, and you were asked during setup. It is
+            what ranks you on the public leaderboard in the Battle tab; switch it
+            off and you are not ranked. When on, LeetSync sends a random ID, the
             extension version, your theme, your README theme, which study
             sheets you use and how far through them you are, and every
             submission result — problem, difficulty, language, verdict, runtime

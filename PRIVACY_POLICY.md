@@ -5,8 +5,10 @@
 ## Summary
 
 LeetSync stores your data on your own device and pushes your solutions to your
-own GitHub repository. It also has an **optional** usage-reporting feature that
-is **switched off unless you turn it on**.
+own GitHub repository. It also has an **optional** usage-reporting feature.
+From version 2.1.0 it is **on unless you turn it off**, shown as a switch during
+setup and changeable in Settings at any time. Installs that had already declined
+it keep that choice — the default applies to new setups, not retroactively.
 
 One thing is sent without that switch: an **activity ping** — a random ID and
 the extension version, at most twice a day, and nothing else. It is on by
@@ -57,7 +59,7 @@ Clearing the username in Settings releases the reservation. Turning usage
 reporting off stops your activity being sent but keeps the name reserved, so
 nobody else can take it while you are not using it.
 
-## Usage reporting — optional, off by default
+## Usage reporting — optional, on unless you turn it off
 
 Settings → **Usage reporting** enables anonymous usage statistics. While it is
 off, none of the data listed below is collected, queued, or sent — only the

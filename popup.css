@@ -400,6 +400,47 @@ body.theme-light .stat-label { font-size: 10.5px; font-weight: 600; margin-top: 
 
 .stat-sub { font-size: 10.5px; color: var(--tx-4); margin-top: 5px; }
 
+/* Consent step.
+   The decision came third, under two paragraphs and a block of small grey
+   type, so the screen read as something to get past rather than something to
+   answer. The switches come first now, each with the one line that says what
+   it does, and the disclosure sits under them as a labelled list rather than
+   prose. */
+.consent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid var(--bd-soft);
+}
+.consent-row:first-of-type { border-top: 0; padding-top: 4px; }
+.consent-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.consent-label { font-size: 13.5px; font-weight: 600; color: var(--tx); }
+.consent-note { font-size: 11.5px; line-height: 1.45; color: var(--tx-4); }
+
+.disclose {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--bd-soft);
+}
+.disclose dt {
+  font-family: var(--f-label);
+  font-size: 8.5px;
+  letter-spacing: .13em;
+  color: var(--tx-5);
+  padding-top: 3px;
+}
+.disclose dd { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--tx-4); }
+
+.consent-links { display: flex; gap: 16px; margin-top: 11px; }
+.consent-links a { font-size: 11.5px; color: var(--ac); text-decoration: none; }
+.consent-links a:hover { text-decoration: underline; }
+body.theme-light .consent-label { font-weight: 700; }
+
 /* The streak is the number people open the popup to check, and it sat in the
    row looking exactly like the other two. Its own ground, and a flame that
    only burns while the run is alive. */
@@ -1065,6 +1106,9 @@ body.theme-light .set-fields { padding: 16px; }
   padding: 0;
 }
 body.theme-light .toggle-track { border-radius: 0; background: var(--bg-hover2); }
+/* The line above is (0,2,1) and `.toggle-track.on` below is (0,2,0), so it
+   won -- and no switch in Modernist has ever looked on. */
+body.theme-light .toggle-track.on { background: var(--ac); }
 .toggle-track.on { background: var(--ac); }
 .toggle-knob {
   position: absolute;

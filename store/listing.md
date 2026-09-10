@@ -102,9 +102,10 @@ and sent only to api.github.com. It is never transmitted anywhere else.
 
 ─── PRIVACY ───
 
-Usage reporting is OFF unless you switch it on, and you are asked once during
-setup. Switching it on is also what puts your username and score on the public
-leaderboard; leave it off and you are not ranked. Sharing your solution code is
+Usage reporting is optional. It is on unless you turn it off, you are shown the
+switch during setup, and Settings changes it at any time. It is also what puts
+your username and score on the public leaderboard; switch it off and you are not
+ranked. Sharing your solution code is
 a separate switch that stays off even then. One activity ping — a random ID and
 the version, twice a day at most — is on by default, disclosed at setup, and
 has its own switch. It does not record which tab you opened or that you opened
