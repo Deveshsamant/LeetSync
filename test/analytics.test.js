@@ -82,6 +82,25 @@ test('an optional origin is gated and asked for', () => {
     'the popup must ask for the origin when reporting is switched on');
 });
 
+test('the first call that needs the optional origin asks for it first', () => {
+  // 2.2.0 shipped with the permission requested at step 4 of setup and the
+  // username claimed at step 2. The claim goes through the permission gate,
+  // so it was refused, and nobody could get past step 2 -- the store shows
+  // 2.2.0 live on 11 September and the database shows completed setups at
+  // zero from that day. Whatever step claims the name must ask first.
+  const manifest = JSON.parse(
+    readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
+  if (!(manifest.optional_host_permissions || []).length) return;
+
+  const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+  const start = popup.indexOf("getElementById('wizNext2').addEventListener");
+  assert.ok(start > 0, 'step 2 handler not found');
+  const handler = popup.slice(start, popup.indexOf("type: 'CLAIM_NAME'", start));
+  assert.match(handler, /requestHost\(\)/,
+    'step 2 sends CLAIM_NAME without first requesting the optional origin; '
+    + 'the claim will be refused and setup cannot proceed');
+});
+
 test('optional permissions are never assumed present', () => {
   // chrome.notifications is undefined until the optional permission is
   // granted, so a bare call throws and takes the rest of the handler with it.

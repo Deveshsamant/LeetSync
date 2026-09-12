@@ -276,6 +276,17 @@
     </div>
 
     <!-- Update Banner -->
+    <!-- Reporting is switched on but the browser has not granted the Worker's
+         origin. Every 2.0.1 install that auto-updated to 2.2.0 arrived in this
+         state, because Chrome drops a required grant when it becomes optional.
+         Shown on every tab, because the fix needs a click and nobody opens
+         Settings to look for a problem they do not know they have. -->
+    <div id="permBanner" class="update-banner" style="display:none;">
+      <span class="maint-icon">!</span>
+      <span style="flex:1;">LeetSync can't reach its server, so reporting and the leaderboard are paused.</span>
+      <button id="permBannerGrant" class="update-action">GRANT ACCESS</button>
+    </div>
+
     <div id="updateBanner" class="update-banner" style="display:none;">
       <span class="maint-icon">↑</span>
       <span id="updateText" style="flex:1;"></span>

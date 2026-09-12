@@ -85,6 +85,10 @@
       "Repo setup says what to do when GitHub refuses it, instead of pointing at a permission that would not have helped",
       "Signing out no longer waits on an unreachable repository",
       "Terms and conditions, linked from setup and from Settings"
+    ],
+    "2.2.1": [
+      "Fixed: setup could not get past the username step in 2.2.0 — the server that checks the name is now asked for at that step, and declining no longer blocks you",
+      "If you updated from 2.0.1, reporting and the leaderboard were silently paused: the browser drops the old permission when it becomes optional. A banner now says so and one click restores it"
     ]
   }
 }

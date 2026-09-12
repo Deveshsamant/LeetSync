@@ -422,6 +422,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // The server that decides uniqueness is behind an optional permission,
+    // and this is the first call that needs it. So it is asked for here --
+    // first, before any other await, because this click is the gesture Chrome
+    // requires and an await ahead of it would lose that. (2.2.0 asked at step
+    // 4 instead, which left this claim refused and nobody able to pass it.)
+    //
+    // Declining is allowed. The name is simply not reserved, setup goes on,
+    // and Settings can claim one later once access is granted there.
+    if (!await Analytics.requestHost()) {
+      nameError.textContent = 'Access to the LeetSync server was declined, so this '
+        + 'username was not reserved. You can set one later in Settings.';
+      nameError.style.display = 'block';
+      await advance();
+      return;
+    }
+
     // Uniqueness is decided by the server, so the answer has to be waited for
     // rather than assumed — otherwise two people can walk away with the same
     // name and only find out later.
@@ -1603,6 +1619,29 @@ document.addEventListener('DOMContentLoaded', () => {
     analyticsRepair.hidden = !broken;
   }
 
+  // The same disagreement, surfaced at the top of every tab rather than only
+  // in Settings. Auto-updating from 2.0.1 put every existing user here.
+  const permBanner = document.getElementById('permBanner');
+  const permBannerGrant = document.getElementById('permBannerGrant');
+
+  async function paintPermBanner() {
+    if (!permBanner || !Analytics.configured()) return;
+    const wants = (await Analytics.isEnabled()) || (await Analytics.pingEnabled());
+    const granted = await Analytics.hasHost();
+    permBanner.style.display = wants && !granted ? 'flex' : 'none';
+  }
+
+  if (permBannerGrant) {
+    permBannerGrant.addEventListener('click', async () => {
+      const granted = await Analytics.requestHost();   // the click is the gesture
+      if (!granted) return;
+      permBanner.style.display = 'none';
+      if (analyticsRepair) analyticsRepair.hidden = true;
+      Analytics.flush();
+      Analytics.heartbeat();
+    });
+  }
+
   const analyticsRepairBtn = document.getElementById('analyticsRepairBtn');
   if (analyticsRepairBtn) {
     analyticsRepairBtn.addEventListener('click', async () => {
@@ -1618,6 +1657,7 @@ document.addEventListener('DOMContentLoaded', () => {
     analyticsToggle.classList.toggle('on', on);
     analyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
     paintAnalyticsRepair(on);
+    paintPermBanner();
 
     // Shown only while reporting is on, so a deletion request can quote it.
     const row = document.getElementById('analyticsIdRow');

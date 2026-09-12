@@ -6,8 +6,14 @@ package is the most common cause of a rejection.
 
 ## Current package
 
-**2.2.0** — `store/dist/leetsync-2.2.0.zip`. The permission changes in it alter
-three fields on the Privacy tab, all marked below. `remote-config.json` still
+**2.2.1** — `store/dist/leetsync-2.2.1.zip`. A hotfix over 2.2.0, which went
+live on 11 September and could not complete setup: the username is claimed at
+step 2, the Worker's permission was asked for at step 4, and the claim was
+refused in between. Nothing on the Listing or Privacy tabs changes from 2.2.0
+— upload the package, leave the fields.
+
+The 2.2.0 permission changes alter three fields on the Privacy tab, all marked
+below. `remote-config.json` still
 says `latestVersion: 2.1.0` on purpose: it drives the update prompt for existing
 users, so move it only once this build is approved.
 

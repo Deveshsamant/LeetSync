@@ -166,7 +166,19 @@ const stub = `
         }
       }
     },
-    tabs: { create: ({ url }) => window.open(url, '_blank') }
+    tabs: { create: ({ url }) => window.open(url, '_blank') },
+    // Optional permissions, from 2.2.0. ?granted=1 starts with the Worker's
+    // origin already held; ?deny=1 makes every request refuse. The default --
+    // not held, request grants -- is the path a fresh install takes at step 2,
+    // which is the one 2.2.0 broke.
+    permissions: {
+      _held: params.get('granted') === '1',
+      contains: (q, cb) => setTimeout(() => cb(window.chrome.permissions._held), 0),
+      request: (q, cb) => {
+        if (params.get('deny') !== '1') window.chrome.permissions._held = true;
+        setTimeout(() => cb(window.chrome.permissions._held), 0);
+      }
+    }
   };
 
   if (wantScreen === 'setup') {
