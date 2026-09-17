@@ -119,8 +119,16 @@ const stub = `
       '*,*::before,*::after{animation:none!important;transition:none!important;' +
       'animation-duration:0s!important;transition-duration:0s!important}' +
       // Whatever the developer happens to be broadcasting today is live data,
-      // and it lands on top of whichever screen is being photographed.
-      '.modal-overlay,#announceBanner{display:none!important}';
+      // and it lands on top of whichever screen is being photographed. The
+      // permission and username banners are state, not screen, for the same
+      // reason.
+      '.modal-overlay,#announceBanner,#permBanner,#nameBanner{display:none!important}' +
+      // The wizard runs in a tab and wears a card frame there. The marketing
+      // shots are one column each, edge to edge, so the frame comes off.
+      'html.setup-tab,body.setup-tab{padding:0!important;display:block!important;' +
+        'background:var(--bg)!important;min-height:0!important}' +
+      'body.setup-tab .wizard-overlay{border:0!important;border-radius:0!important;' +
+        'box-shadow:none!important}';
     document.addEventListener('DOMContentLoaded', () => document.head.appendChild(kill));
   }
   const store = {
