@@ -99,7 +99,8 @@
     ],
     "2.2.3": [
       "Setup now opens in its own tab. The toolbar popup closes the moment a permission prompt appears, and that was cutting setup short for some people — a tab does not, so it finishes every time",
-      "Fixed: turning usage reporting on from Settings could quietly not stick if the permission prompt appeared. The choice is saved before the browser is asked"
+      "Fixed: turning usage reporting on from Settings could quietly not stick if the permission prompt appeared. The choice is saved before the browser is asked",
+      "If you finished setup without a username — which the same prompt problem caused — a one-line banner now offers to take you to the field, since setup will not ask again"
     ]
   }
 }

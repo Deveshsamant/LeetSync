@@ -307,6 +307,16 @@
       <button id="permBannerGrant" class="update-action">GRANT ACCESS</button>
     </div>
 
+    <!-- Setup finished without a username. That was every 2.2.0-2.2.2 setup
+         whose claim was lost to the permission prompt closing the popup, and
+         setup will never ask them again -- so this does, until they have one
+         or turn reporting off. -->
+    <div id="nameBanner" class="update-banner" style="display:none;">
+      <span class="maint-icon">@</span>
+      <span style="flex:1;">You're on the leaderboard as Anonymous. Pick a username?</span>
+      <button id="nameBannerGo" class="update-action">CHOOSE</button>
+    </div>
+
     <div id="updateBanner" class="update-banner" style="display:none;">
       <span class="maint-icon">↑</span>
       <span id="updateText" style="flex:1;"></span>

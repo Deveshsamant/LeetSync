@@ -134,7 +134,8 @@ async function summary(env, days) {
   const prevSince = since - days * 86400000;
 
   const [totals, daily, events, problems, difficulty, languages, versions,
-         failures, sheets, statuses, themes, perf, previous, funnel] =
+         failures, sheets, statuses, themes, perf, previous, funnel,
+         firstSeen, ever] =
     await Promise.all([
       all(env, `SELECT COUNT(*) AS events, COUNT(DISTINCT install_id) AS installs,
                        MIN(ts) AS first_seen, MAX(ts) AS last_seen
@@ -215,12 +216,34 @@ async function summary(env, days) {
                   COUNT(DISTINCT CASE WHEN event='submission' THEN install_id END) AS reached_submit,
                   COUNT(DISTINCT CASE WHEN event='push_ok' THEN install_id END) AS reached_push
                 FROM events WHERE ts >= ?`, since),
+      // NEW installs per day: the day of each install's first event ever,
+      // counted only when that day is inside the window. Distinct from the
+      // per-day `installs` above, which is everyone active that day.
+      all(env, `SELECT date(first/1000,'unixepoch') AS day, COUNT(*) AS new_installs
+                FROM (SELECT install_id, MIN(ts) AS first FROM events GROUP BY install_id)
+                WHERE first >= ? GROUP BY day ORDER BY day`, since),
+      // And the figures that do not move with the range picker.
+      all(env, `SELECT COUNT(DISTINCT install_id) AS all_time_installs,
+                       (SELECT COUNT(*) FROM names) AS named
+                FROM events`),
     ]);
+
+  // Fold new_installs into the daily rows, so a day is one object.
+  const newByDay = new Map(firstSeen.map(r => [r.day, r.new_installs]));
+  for (const row of daily) row.new_installs = newByDay.get(row.day) || 0;
+  // A day with new installs but no other events cannot happen (the first
+  // event is an event), so no rows need adding.
+  const newInWindow = firstSeen.reduce((n, r) => n + r.new_installs, 0);
 
   return {
     days,
     generatedAt: Date.now(),
-    totals: totals[0] || { events: 0, installs: 0 },
+    totals: {
+      ...(totals[0] || { events: 0, installs: 0 }),
+      new_installs: newInWindow,
+      all_time_installs: (ever[0] && ever[0].all_time_installs) || 0,
+      named: (ever[0] && ever[0].named) || 0,
+    },
     previous: previous[0] || { events: 0, installs: 0 },
     funnel: funnel[0] || {},
     daily, events, problems, difficulty, languages, versions, failures, sheets,

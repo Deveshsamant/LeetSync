@@ -1829,6 +1829,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // No username, reporting on: they are "Anonymous" on a public leaderboard
+  // and do not know it. Setup will not ask again, so the popup does -- one
+  // line, one button that lands on the field in Settings.
+  const nameBanner = document.getElementById('nameBanner');
+  async function paintNameBanner() {
+    if (!nameBanner) return;
+    const [on, name] = await Promise.all([Analytics.isEnabled(), Analytics.displayName()]);
+    nameBanner.style.display = on && !name ? 'flex' : 'none';
+  }
+  const nameBannerGo = document.getElementById('nameBannerGo');
+  if (nameBannerGo) {
+    nameBannerGo.addEventListener('click', () => {
+      switchTab('settings');
+      const field = document.getElementById('displayName');
+      if (field) {
+        field.scrollIntoView({ block: 'center' });
+        field.focus();
+      }
+    });
+  }
+
   const analyticsRepairBtn = document.getElementById('analyticsRepairBtn');
   if (analyticsRepairBtn) {
     analyticsRepairBtn.addEventListener('click', async () => {
@@ -1845,6 +1866,7 @@ document.addEventListener('DOMContentLoaded', () => {
     analyticsToggle.setAttribute('aria-checked', on ? 'true' : 'false');
     paintAnalyticsRepair(on);
     paintPermBanner();
+    paintNameBanner();
 
     // Shown only while reporting is on, so a deletion request can quote it.
     const row = document.getElementById('analyticsIdRow');
@@ -1929,6 +1951,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // moment it closes, and that is precisely when a blur fires.
     const claim = await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'CLAIM_NAME', name: wanted }, (res) => {
+        if (res && res.ok) paintNameBanner();
         resolve(chrome.runtime.lastError ? { ok: false, reason: 'offline' } : res);
       });
     });
