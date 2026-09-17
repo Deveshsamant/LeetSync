@@ -96,6 +96,10 @@
       "The username question moved to the last step of setup, where the leaderboard it names is explained, and it is skipped entirely when the repository already knows you",
       "A History view on the Solved tab: everything you have solved, newest first, grouped by day, with a link to each solution in your repository",
       "Fixed: the STRUGGLED filter and the Topics card had never shown anything — attempts and tags were recorded but never handed to the popup"
+    ],
+    "2.2.3": [
+      "Setup now opens in its own tab. The toolbar popup closes the moment a permission prompt appears, and that was cutting setup short for some people — a tab does not, so it finishes every time",
+      "Fixed: turning usage reporting on from Settings could quietly not stick if the permission prompt appeared. The choice is saved before the browser is asked"
     ]
   }
 }

@@ -2009,6 +2009,13 @@ chrome.runtime.onInstalled.addListener((details) => {
 
   // No-ops unless the user has opted in.
   report(details.reason === 'update' ? 'update' : 'install');
+
+  // Setup runs in a tab rather than the popup -- see the launcher in popup.js
+  // -- and a fresh install opens it straight away, so the first thing a new
+  // user sees is the wizard rather than a toolbar icon they have to find.
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?setup=1') });
+  }
 });
 
 // Also re-inject when the service worker starts

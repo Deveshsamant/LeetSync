@@ -50,8 +50,58 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══════════════════════════════════════════════════════════
   // Check if setup is needed → show wizard
   // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Is this document a tab, or the toolbar popup?
+   *
+   * The wizard only runs as a tab. A popup closes the moment a permission
+   * prompt takes focus, and everything after that await -- the claim, the
+   * repository creation, the finish -- is lost. Three releases patched three
+   * instances of that before the surface itself was removed. The popup shows
+   * a launcher instead, and a fresh install opens the tab on its own.
+   */
+  const IN_SETUP_TAB = new URLSearchParams(location.search).get('setup') === '1';
+  if (IN_SETUP_TAB) {
+    document.documentElement.classList.add('setup-tab');
+    document.body.classList.add('setup-tab');
+  }
+
+  const SETUP_URL = chrome.runtime.getURL('popup.html?setup=1');
+  const setupLauncher = document.getElementById('setupLauncher');
+
+  /** Open the setup tab -- or bring the one that is already open forward. */
+  function openSetupTab() {
+    try {
+      chrome.tabs.query({ url: SETUP_URL }, (tabs) => {
+        void chrome.runtime.lastError;
+        const existing = tabs && tabs[0];
+        if (existing) {
+          chrome.tabs.update(existing.id, { active: true });
+          if (chrome.windows && existing.windowId != null) chrome.windows.update(existing.windowId, { focused: true });
+        } else {
+          chrome.tabs.create({ url: SETUP_URL });
+        }
+        window.close();
+      });
+    } catch (error) {
+      chrome.tabs.create({ url: SETUP_URL });
+      window.close();
+    }
+  }
+  document.getElementById('setupLaunch').addEventListener('click', openSetupTab);
+
   chrome.storage.sync.get(['githubToken', 'githubRepo', 'wizardStep'], (data) => {
     if (!data.githubToken || !data.githubRepo) {
+      if (!IN_SETUP_TAB) {
+        // The popup: hand off to the tab and stop here.
+        setupLauncher.style.display = 'flex';
+        wizardOverlay.style.display = 'none';
+        mainPopup.style.display = 'none';
+        if (data.githubToken || (data.wizardStep && data.wizardStep > 1)) {
+          document.getElementById('setupLaunch').textContent = 'Continue setup →';
+        }
+        return;
+      }
       wizardOverlay.style.display = 'flex';
       mainPopup.style.display = 'none';
 
@@ -579,7 +629,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  if (IN_SETUP_TAB) {
+    document.getElementById('wizTabHint').style.display = '';
+    document.getElementById('wizDone').textContent = 'Done';
+  }
+
   document.getElementById('wizDone').addEventListener('click', () => {
+    if (IN_SETUP_TAB) {
+      // The dashboard lives in the popup. Close the tab; the toolbar icon is
+      // where they go next, and the hint above the button says so.
+      chrome.storage.sync.remove('wizardStep');
+      try {
+        chrome.tabs.getCurrent((tab) => {
+          void chrome.runtime.lastError;
+          if (tab && tab.id != null) chrome.tabs.remove(tab.id); else window.close();
+        });
+      } catch (error) { window.close(); }
+      return;
+    }
     wizardOverlay.style.display = 'none';
     mainPopup.style.display = 'flex';
     chrome.storage.sync.remove('wizardStep');
@@ -1731,6 +1798,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!analyticsRepair) return;
     const broken = on === true && Analytics.configured() && !await Analytics.hasHost();
     analyticsRepair.hidden = !broken;
+    // The row says "reporting is on". Whatever repainted the switch in the
+    // meantime, it must not be saying otherwise underneath that sentence.
+    if (broken) {
+      analyticsToggle.classList.add('on');
+      analyticsToggle.setAttribute('aria-checked', 'true');
+    }
   }
 
   // The same disagreement, surfaced at the top of every tab rather than only
@@ -1803,21 +1876,30 @@ document.addEventListener('DOMContentLoaded', () => {
     pingToggle.setAttribute('aria-checked', on ? 'true' : 'false');
   };
   Analytics.pingEnabled().then(paintPingToggle);
+  // Both switches below can raise the permission prompt, and the prompt
+  // closes the popup. So the choice is persisted FIRST, without awaiting --
+  // a chrome.storage write is committed by the browser process whether or
+  // not this page survives -- and the request is issued in the same tick, so
+  // the click's activation still covers it. Awaiting the request before the
+  // save is how "turn reporting on" used to quietly turn nothing on.
   pingToggle.addEventListener('click', async () => {
     const next = !pingToggle.classList.contains('on');
-    // Straight off the click, before anything is awaited -- the Worker cannot
-    // be reached at all until its origin is granted, and somebody who declined
-    // during setup is asked again here rather than left silently queueing.
-    if (next) await Analytics.requestHost();
-    await Analytics.setPing(next);
     paintPingToggle(next);
+    const saved = Analytics.setPing(next);
+    const asked = next ? Analytics.requestHost() : Promise.resolve(true);
+    await saved;
+    await asked;
+    paintPermBanner();
   });
 
   analyticsToggle.addEventListener('click', async () => {
     const next = !analyticsToggle.classList.contains('on');
-    if (next) await Analytics.requestHost();   // before any await; see above
-    await Analytics.setEnabled(next);
+    const saved = Analytics.setEnabled(next);
+    const asked = next ? Analytics.requestHost() : Promise.resolve(true);
+    await saved;
     paintAnalyticsToggle(next);          // after setEnabled, so the id exists
+    await asked;
+    paintAnalyticsToggle(next);          // and again once the grant is known
     // Recorded only when switching on — the off path must send nothing.
     // The theme is worth knowing; that a popup opened is not.
     if (next) Analytics.track('theme', { detail: currentUITheme(), theme: currentUITheme() });

@@ -132,6 +132,57 @@ test('the consent step saves the switches before it asks the browser', () => {
     'step 2 claims the username; that belongs on step 4, after the repository is read');
 });
 
+test('nothing in the popup awaits a permission prompt before persisting', () => {
+  // The prompt closes the popup. Anything awaited after
+  // chrome.permissions.request() in popup context may never run, and three
+  // releases each lost something different to that: the username claim
+  // (2.2.0), the consent switches (2.2.1), and Settings' own reporting
+  // switch (2.2.2). Every handler that can raise the prompt must issue its
+  // storage write before it issues the request.
+  const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+
+  const handler = (anchor) => {
+    const start = popup.indexOf(anchor);
+    assert.ok(start > 0, `handler not found: ${anchor}`);
+    return popup.slice(start, popup.indexOf('\n  });\n', start));
+  };
+
+  for (const [anchor, persist] of [
+    ["analyticsToggle.addEventListener('click'", 'Analytics.setEnabled('],
+    ["pingToggle.addEventListener('click'", 'Analytics.setPing('],
+  ]) {
+    const body = handler(anchor);
+    const p = body.indexOf(persist);
+    const r = body.indexOf('requestHost(');
+    assert.ok(p >= 0 && r >= 0, `${anchor}: expected both ${persist} and requestHost()`);
+    assert.ok(p < r, `${anchor}: requests the permission before persisting; the save is lost to the prompt`);
+    assert.ok(!/\bawait\b/.test(body.slice(p, r)),
+      `${anchor}: awaits between the save and the request; the request must be in the click's tick`);
+  }
+});
+
+test('the setup wizard only renders as a tab', () => {
+  // The popup shows a launcher; the wizard runs in popup.html?setup=1. That is
+  // the structural fix for the prompt closing the popup, and it only holds if
+  // the popup never shows the wizard itself.
+  const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+  const html = readFileSync(join(__dirname, '..', 'popup.html'), 'utf8');
+  assert.match(popup, /IN_SETUP_TAB = new URLSearchParams\(location\.search\)\.get\('setup'\) === '1'/,
+    'popup.js does not read the setup flag');
+  assert.ok(html.includes('id="setupLauncher"') && html.includes('id="setupLaunch"'),
+    'popup.html has no setup launcher');
+  // In the gate, the popup branch must return before showing the wizard.
+  const gate = popup.slice(popup.indexOf("chrome.storage.sync.get(['githubToken', 'githubRepo', 'wizardStep']"));
+  const popupBranch = gate.slice(0, gate.indexOf("wizardOverlay.style.display = 'flex'"));
+  assert.match(popupBranch, /if \(!IN_SETUP_TAB\)/, 'the gate does not branch on IN_SETUP_TAB before showing the wizard');
+  assert.match(popupBranch, /setupLauncher\.style\.display = 'flex'/, 'the popup branch does not show the launcher');
+  assert.match(popupBranch, /return;/, 'the popup branch does not return before the wizard is shown');
+
+  const bg = readFileSync(join(__dirname, '..', 'background.js'), 'utf8');
+  assert.match(bg, /details\.reason === 'install'[\s\S]{0,200}popup\.html\?setup=1/,
+    'a fresh install does not open the setup tab');
+});
+
 test('entering the consent step reads the repository before asking for a name', () => {
   const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
   assert.match(popup, /if \(step === 4\) prepareConsentStep\(\)/,

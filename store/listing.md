@@ -6,7 +6,12 @@ package is the most common cause of a rejection.
 
 ## Current package
 
-**2.2.2** — `store/dist/leetsync-2.2.2.zip`. Two more fixes over 2.2.1: the
+**2.2.3** — `store/dist/leetsync-2.2.3.zip`. Setup runs in a tab now: the
+popup closes when a permission prompt takes focus, and three releases patched
+three things that were lost to that before the surface was removed. Nothing on
+the Listing or Privacy tabs changes.
+
+**2.2.2** — two more fixes over 2.2.1: the
 consent switches are now saved before the permission prompt (they were being
 lost to it), and a reinstall is recognised by its repository instead of being
 asked for a username again. Nothing on the Listing or Privacy tabs changes.

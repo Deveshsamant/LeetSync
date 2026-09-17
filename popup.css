@@ -1361,6 +1361,49 @@ body.theme-light .token-display { border-width: 2px; }
 .token-meta { font-family: var(--f-label); font-size: 9.5px; color: var(--tx-5); }
 
 /* ═══════════════ WIZARD ═══════════════ */
+/* ── Setup in a tab ────────────────────────────────────────────
+   popup.html?setup=1 is the same document opened as a tab. The fixed 420x600
+   frame is released and the wizard sits centred on a plain ground. */
+html.setup-tab, body.setup-tab {
+  width: auto;
+  height: auto;
+  min-height: 100vh;
+  overflow: auto;
+}
+body.setup-tab {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 16px 64px;
+  background: var(--bg-2, var(--bg));
+}
+body.setup-tab .wizard-overlay {
+  position: relative;
+  inset: auto;
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
+}
+body.setup-tab.theme-light .wizard-overlay { border-radius: 0; border-width: 2px; box-shadow: var(--card-sh); }
+
+/* The launcher: what the popup shows instead of the wizard. */
+.setup-launcher {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 28px;
+}
+.setup-launcher h2 { margin: 8px 0 0; font-size: 22px; letter-spacing: -.01em; }
+.setup-launcher .wizard-desc { margin-top: 10px; }
+.setup-launcher img { border-radius: 14px; }
+body.theme-light .setup-launcher img { border-radius: 0; border: 2px solid var(--bd); box-shadow: 4px 4px 0 var(--ac); }
+
 .wizard-overlay {
   position: absolute;
   inset: 0;

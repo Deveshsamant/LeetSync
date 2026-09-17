@@ -12,6 +12,18 @@
   <!-- ═══════════════════════════════════════════════════════ -->
   <!-- ONBOARDING WIZARD — design screen 01 · FIRST RUN        -->
   <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- Shown in the POPUP when setup is incomplete. The wizard itself runs
+       in a tab (popup.html?setup=1), because the popup closes the moment a
+       permission prompt takes focus and nothing after that survives. -->
+  <div id="setupLauncher" class="setup-launcher" style="display:none;">
+    <img src="icons/icon128.png" alt="" width="56" height="56">
+    <div class="sec-label" style="color:var(--ac);margin-top:18px;">WELCOME</div>
+    <h2>Set up LeetSync</h2>
+    <p class="wizard-desc" style="max-width:30ch;">Connect GitHub and choose a repository.
+      It takes about a minute and opens in a tab, so nothing gets cut off.</p>
+    <button class="btn btn-primary" id="setupLaunch" style="margin-top:22px;min-width:200px;">Start setup &rarr;</button>
+  </div>
+
   <div id="wizardOverlay" class="wizard-overlay" style="display:none;">
     <div class="wizard-container">
 
@@ -220,6 +232,9 @@
           <h2 style="margin-top:7px;">You're all set</h2>
           <p class="wizard-desc">LeetSync is active. Start solving and your code appears on GitHub automatically.</p>
           <div id="wizRepoLink" style="margin-top:14px;"></div>
+          <!-- Only in the tab: the popup is where the dashboard lives. -->
+          <p class="wizard-desc" id="wizTabHint" style="display:none;margin-top:16px;">
+            Close this tab and click the LeetSync icon in your toolbar.</p>
         </div>
         <div class="wizard-actions">
           <button class="btn btn-primary" id="wizDone">Open dashboard →</button>

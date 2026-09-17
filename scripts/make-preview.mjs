@@ -57,6 +57,14 @@ const stub = `
       solved.map((p, i) => [String(p.number), { number: p.number, date: daysAgo(i) }])),
     pushCount: 11,
   };
+  // ?consent=1 is the install that said yes at setup. With ?granted=0 that is
+  // the state every 2.0.1 user landed in on auto-update: switch on, origin
+  // not held, repair row showing.
+  if (new URLSearchParams(location.search).get('consent') === '1') {
+    localStore.analyticsEnabled = true;
+    localStore.analyticsPing = true;
+    localStore.analyticsInstallId = 'preview-install-id';
+  }
   // ?whatsnew=1 stands in for a just-updated install. Deliberately leaves
   // remoteConfig unset, which is the case that used to swallow the release
   // notes: no cached fetch means the popup must fall back to the packaged
@@ -74,6 +82,12 @@ const stub = `
   // ?step= lands on one of its five screens. popup.js restores wizardStep
   // itself, so this only has to seed storage.
   const wantScreen = params.get('screen');
+  // From 2.2.3 the wizard only renders as a tab (popup.html?setup=1); the
+  // popup shows a launcher instead. ?screen=setup means the wizard, so the
+  // flag popup.js reads is added to the URL before popup.js runs.
+  if (wantScreen === 'setup' && params.get('setup') !== '1') {
+    history.replaceState(null, '', location.pathname + location.search + '&setup=1');
+  }
   const wantStep = Number(params.get('step')) || 2;
   // ?full=1 lets the popup grow to its natural height instead of scrolling
   // inside 420x600, so a capture gets the whole screen rather than the top of
@@ -191,6 +205,13 @@ const stub = `
       }
     }
   };
+
+  // ?launcher=1 is the POPUP with setup incomplete: no token, no setup flag,
+  // so popup.js shows the launcher rather than the wizard.
+  if (params.get('launcher') === '1') {
+    delete store.githubToken;
+    delete store.githubRepo;
+  }
 
   if (wantScreen === 'setup') {
     delete store.githubToken;
