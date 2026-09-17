@@ -153,3 +153,45 @@ test('garbage in any field cannot throw', () => {
     assert.doesNotThrow(() => DeviceSync.apply(DeviceSync.merge(junk, DeviceSync.empty())));
   }
 });
+
+// ── Identity ──────────────────────────────────────────────────
+//
+// A fresh install is a stranger to the analytics server but not to the
+// repository. The document carries who it belongs to so that a reinstall, or
+// a second machine, comes back as the same person on the leaderboard instead
+// of a new row -- and is not asked for a username again.
+
+const ident = (installId, at, name, nameAt) => ({ installId, at, name, nameAt });
+
+test('identity: the earliest install id published for a repository wins', () => {
+  const old = { ...DeviceSync.snapshot({}, 100), identity: ident('OLD', 100, 'devesh', 100) };
+  const fresh = { ...DeviceSync.snapshot({}, 900), identity: ident('NEW', 900, 'devesh2', 900) };
+  assert.equal(DeviceSync.merge(old, fresh).identity.installId, 'OLD');
+  assert.equal(DeviceSync.merge(fresh, old).identity.installId, 'OLD',
+    'order of sync must not change who the repository belongs to');
+  // And the whole winner comes across, name included.
+  assert.equal(DeviceSync.merge(fresh, old).identity.name, 'devesh');
+});
+
+test('identity: same id, the latest rename wins', () => {
+  const a = { ...DeviceSync.snapshot({}, 100), identity: ident('X', 100, 'before', 100) };
+  const b = { ...DeviceSync.snapshot({}, 100), identity: ident('X', 100, 'after', 500) };
+  assert.equal(DeviceSync.merge(a, b).identity.name, 'after');
+  assert.equal(DeviceSync.merge(b, a).identity.name, 'after');
+});
+
+test('identity: one side without one adopts the other s', () => {
+  const none = DeviceSync.snapshot({}, 100);
+  const has = { ...DeviceSync.snapshot({}, 100), identity: ident('X', 50, 'n', 50) };
+  assert.equal(none.identity, null, 'snapshot without an identity publishes none');
+  assert.deepEqual(DeviceSync.merge(none, has).identity, DeviceSync.merge(has, none).identity);
+  assert.equal(DeviceSync.merge(none, has).identity.installId, 'X');
+});
+
+test('identity: snapshot carries it and apply hands it back', () => {
+  const snap = DeviceSync.snapshot({ identity: { installId: 'X', at: 5, name: 'n', nameAt: 6 } }, 100);
+  assert.deepEqual(snap.identity, { installId: 'X', at: 5, name: 'n', nameAt: 6 });
+  assert.deepEqual(DeviceSync.apply(snap).identity, { installId: 'X', at: 5, name: 'n', nameAt: 6 });
+  // Idempotent with itself, like everything else in the document.
+  assert.deepEqual(DeviceSync.merge(snap, snap).identity, snap.identity);
+});

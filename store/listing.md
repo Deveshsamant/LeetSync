@@ -6,7 +6,12 @@ package is the most common cause of a rejection.
 
 ## Current package
 
-**2.2.1** — `store/dist/leetsync-2.2.1.zip`. A hotfix over 2.2.0, which went
+**2.2.2** — `store/dist/leetsync-2.2.2.zip`. Two more fixes over 2.2.1: the
+consent switches are now saved before the permission prompt (they were being
+lost to it), and a reinstall is recognised by its repository instead of being
+asked for a username again. Nothing on the Listing or Privacy tabs changes.
+
+**2.2.1** — a hotfix over 2.2.0, which went
 live on 11 September and could not complete setup: the username is claimed at
 step 2, the Worker's permission was asked for at step 4, and the claim was
 refused in between. Nothing on the Listing or Privacy tabs changes from 2.2.0

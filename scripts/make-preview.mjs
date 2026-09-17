@@ -34,7 +34,18 @@ const stub = `
     { number: 1,  title: 'Two Sum', difficulty: 'Easy', language: 'Python', date: '2026-08-31' },
     { number: 121, title: 'Best Time to Buy and Sell Stock', difficulty: 'Easy', language: 'Python', date: '2026-08-31' },
     { number: 169, title: 'Majority Element', difficulty: 'Easy', language: 'C++', date: '2026-08-30' }
-  ];
+  ].map((p, i) => ({
+    ...p,
+    // What GET_PROBLEMS sends since 2.2.2: the folder as the push derives it,
+    // so History can link every row, and attempts so STRUGGLED has a member.
+    // Spelled without \s: this sits inside the stub's template literal, which
+    // would swallow the backslash and quietly strip the spaces instead.
+    folderName: String(p.number).padStart(4, '0') + '-'
+      + p.title.trim().replace(/[^a-zA-Z0-9 -]/g, '').replace(/ +/g, '-'),
+    attempts: i % 3 === 0 ? 3 : 1,
+    tags: [],
+    firstSolvedOn: p.date,
+  }));
   // Enough local state for Battle to have both sides of a comparison; without
   // it the tab renders its empty state, which is not what the screen is for.
   //

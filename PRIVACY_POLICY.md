@@ -1,6 +1,6 @@
 # Privacy Policy — LeetSync
 
-**Last updated:** September 10, 2026
+**Last updated:** September 17, 2026
 
 ## Summary
 
@@ -40,6 +40,15 @@ Alongside your solutions, LeetSync keeps a `.leetsync/state.json` file in the
 repository you connected. It holds the progress that is shared between your own
 computers: which problems you have solved, the days you solved on, unlocked
 achievements and study-sheet ticks.
+
+**From version 2.2.2 it also holds your random install ID and the username you
+chose.** That is what lets a reinstall, or a second computer set up against the
+same repository, come back as the same person on the leaderboard instead of a
+new row — and skip the username question. The install ID is a random UUID
+generated on your device; it is not derived from your GitHub account or
+anything else about you. If your repository is public, that ID and username
+are readable by anyone who reads the file, the same as the leaderboard already
+shows the username to every LeetSync user.
 
 It is written with your own token to your own repository. It contains no token,
 no email, and no GitHub username, and it is never sent anywhere else — the

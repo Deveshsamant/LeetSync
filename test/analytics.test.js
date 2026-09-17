@@ -82,23 +82,64 @@ test('an optional origin is gated and asked for', () => {
     'the popup must ask for the origin when reporting is switched on');
 });
 
-test('the first call that needs the optional origin asks for it first', () => {
-  // 2.2.0 shipped with the permission requested at step 4 of setup and the
-  // username claimed at step 2. The claim goes through the permission gate,
-  // so it was refused, and nobody could get past step 2 -- the store shows
-  // 2.2.0 live on 11 September and the database shows completed setups at
-  // zero from that day. Whatever step claims the name must ask first.
+test('the consent step saves the switches before it asks the browser', () => {
+  // Two releases got the order wrong in two different ways, and both showed
+  // up in the database rather than in a test.
+  //
+  // 2.2.0 claimed the username at step 2 and asked for the permission at step
+  // 4; the claim went through the permission gate and nobody could pass step
+  // 2. 2.2.1 moved the request up but still AWAITED it before saving the
+  // switches -- and for every new user, nothing after that await ran: the
+  // names table filled while consent never arrived.
+  //
+  // So the rule is checked as an order of statements inside finishConsent:
+  // persist first, then request, then claim.
   const manifest = JSON.parse(
     readFileSync(join(__dirname, '..', 'manifest.json'), 'utf8'));
   if (!(manifest.optional_host_permissions || []).length) return;
 
   const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
-  const start = popup.indexOf("getElementById('wizNext2').addEventListener");
-  assert.ok(start > 0, 'step 2 handler not found');
-  const handler = popup.slice(start, popup.indexOf("type: 'CLAIM_NAME'", start));
-  assert.match(handler, /requestHost\(\)/,
-    'step 2 sends CLAIM_NAME without first requesting the optional origin; '
-    + 'the claim will be refused and setup cannot proceed');
+  const start = popup.indexOf('async function finishConsent(');
+  assert.ok(start > 0, 'finishConsent not found');
+  const body = popup.slice(start, popup.indexOf('\n  }\n', start));
+
+  const at = (needle) => {
+    const i = body.indexOf(needle);
+    assert.ok(i >= 0, `finishConsent no longer contains ${needle}`);
+    return i;
+  };
+  const persist = at('Analytics.setEnabled(');
+  const request = at('grantOptional(');
+  const claim = at("type: 'CLAIM_NAME'");
+
+  assert.ok(persist < request,
+    'finishConsent asks for the permission before saving the switches; '
+    + 'the save is lost to the prompt and reporting reads as off');
+  assert.ok(request < claim,
+    'finishConsent claims the username before the origin can have been granted');
+
+  // And the save must not sit behind an await of the request.
+  const between = body.slice(persist, request);
+  assert.ok(!/\bawait\b/.test(between),
+    'there is an await between issuing the save and issuing the request; '
+    + 'the request must be in the same tick as the click');
+
+  // Step 2 is the token only now. A claim there would be before the repo is
+  // known, so a returning user could not be recognised first.
+  const s2 = popup.indexOf("getElementById('wizNext2').addEventListener");
+  const s2body = popup.slice(s2, popup.indexOf('\n  });\n', s2));
+  assert.ok(!s2body.includes('CLAIM_NAME'),
+    'step 2 claims the username; that belongs on step 4, after the repository is read');
+});
+
+test('entering the consent step reads the repository before asking for a name', () => {
+  const popup = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+  assert.match(popup, /if \(step === 4\) prepareConsentStep\(\)/,
+    'step 4 does not run prepareConsentStep on entry');
+  const start = popup.indexOf('function prepareConsentStep(');
+  const body = popup.slice(start, popup.indexOf('\n  }\n', start));
+  assert.match(body, /SYNC_DEVICES/, 'prepareConsentStep does not read the shared document');
+  assert.match(body, /write: false/, 'the read on entering step 4 must not publish');
 });
 
 test('optional permissions are never assumed present', () => {

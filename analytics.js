@@ -33,6 +33,10 @@ const Analytics = (() => {
   const ID_KEY = 'analyticsInstallId';
   const QUEUE_KEY = 'analyticsQueue';
   const NAME_KEY = 'analyticsDisplayName';
+  // When the id was minted and when the name was last set. These are what let
+  // two devices agree on whose identity is older -- see DeviceSync.
+  const ID_AT_KEY = 'analyticsInstallIdAt';
+  const NAME_AT_KEY = 'analyticsDisplayNameAt';
   const PING_KEY = 'analyticsPing';
   const PING_AT_KEY = 'analyticsPingAt';
 
@@ -275,7 +279,7 @@ const Analytics = (() => {
   /** Empty clears it; past events already sent keep whatever they carried. */
   async function setDisplayName(name) {
     const cleaned = typeof name === 'string' ? name.trim().slice(0, MAX_NAME) : '';
-    await setLocal({ [NAME_KEY]: cleaned });
+    await setLocal({ [NAME_KEY]: cleaned, [NAME_AT_KEY]: Date.now() });
     return cleaned;
   }
 
@@ -304,7 +308,7 @@ const Analytics = (() => {
         body: JSON.stringify({ name: wanted, installId: await installId() }),
       });
       const body = await res.json();
-      if (body && body.ok) await setLocal({ [NAME_KEY]: body.name || '' });
+      if (body && body.ok) await setLocal({ [NAME_KEY]: body.name || '', [NAME_AT_KEY]: Date.now() });
       return body || { ok: false, reason: 'server' };
     } catch (error) {
       return { ok: false, reason: 'offline', detail: error && error.message };
@@ -317,8 +321,56 @@ const Analytics = (() => {
     if (data[ID_KEY]) return data[ID_KEY];
     const id = (crypto.randomUUID && crypto.randomUUID())
       || Math.random().toString(36).slice(2) + Date.now().toString(36);
-    await setLocal({ [ID_KEY]: id });
+    await setLocal({ [ID_KEY]: id, [ID_AT_KEY]: Date.now() });
     return id;
+  }
+
+  /**
+   * The identity as it stands, WITHOUT minting one. Read by the device sync
+   * so it can be published; a device that has never needed an id should not
+   * be handed one just for asking.
+   *
+   * An id from before `at` was recorded is stamped now. That makes it look
+   * newer than any id the repository already holds, which is the right way
+   * round: the machine that published first anchors the identity.
+   */
+  async function identity() {
+    const d = await local([ID_KEY, ID_AT_KEY, NAME_KEY, NAME_AT_KEY]);
+    if (!d[ID_KEY]) return null;
+    let at = d[ID_AT_KEY];
+    if (typeof at !== 'number') {
+      at = Date.now();
+      await setLocal({ [ID_AT_KEY]: at });
+    }
+    return {
+      installId: d[ID_KEY],
+      at,
+      name: d[NAME_KEY] || null,
+      nameAt: typeof d[NAME_AT_KEY] === 'number' ? d[NAME_AT_KEY] : 0,
+    };
+  }
+
+  /**
+   * Become the identity the repository holds. Called after a merge, so what
+   * arrives here has already won against whatever this device had -- see
+   * DeviceSync.mergeIdentity for how.
+   *
+   * Returns true when something changed, which the setup screen uses to know
+   * that a returning user was just recognised.
+   */
+  async function adoptIdentity(next) {
+    if (!next || !next.installId) return false;
+    const cur = await local([ID_KEY, NAME_KEY]);
+    const changed = cur[ID_KEY] !== next.installId
+      || (next.name || null) !== (cur[NAME_KEY] || null);
+    if (!changed) return false;
+    const patch = { [ID_KEY]: next.installId, [ID_AT_KEY]: next.at || Date.now() };
+    if (next.name) {
+      patch[NAME_KEY] = next.name;
+      patch[NAME_AT_KEY] = next.nameAt || Date.now();
+    }
+    await setLocal(patch);
+    return true;
   }
 
   const version = () => {
@@ -476,6 +528,7 @@ const Analytics = (() => {
 
   return {
     hasHost, requestHost, ORIGIN,
+    identity, adoptIdentity,
     track, flush, isEnabled, setEnabled, sharesCode, setShareCode, configured, debug,
     displayName, setDisplayName, claimName, pingEnabled, setPing, heartbeat,
     leaderboard, announcements, sendFeedback,

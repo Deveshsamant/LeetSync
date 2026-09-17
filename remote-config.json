@@ -89,6 +89,13 @@
     "2.2.1": [
       "Fixed: setup could not get past the username step in 2.2.0 — the server that checks the name is now asked for at that step, and declining no longer blocks you",
       "If you updated from 2.0.1, reporting and the leaderboard were silently paused: the browser drops the old permission when it becomes optional. A banner now says so and one click restores it"
+    ],
+    "2.2.2": [
+      "Fixed: turning on usage reporting during setup did not stick — it showed off in Settings and only the activity ping was sent. The choice is now saved before the browser is asked for anything",
+      "You are recognised by your repository. Reinstall, or set up a second computer against the same repo, and you come back as the same person on the leaderboard — no new username, no second row",
+      "The username question moved to the last step of setup, where the leaderboard it names is explained, and it is skipped entirely when the repository already knows you",
+      "A History view on the Solved tab: everything you have solved, newest first, grouped by day, with a link to each solution in your repository",
+      "Fixed: the STRUGGLED filter and the Topics card had never shown anything — attempts and tags were recorded but never handed to the popup"
     ]
   }
 }

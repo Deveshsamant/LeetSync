@@ -264,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById(`wizStep${step}`).classList.add('active');
     if (step === 3) adaptRepoStep();
+    if (step === 4) prepareConsentStep();
 
     // The counter was static markup and never moved past "STEP 1 / 4".
     const counter = document.querySelector('.wizard-step-count');
@@ -302,6 +303,13 @@ document.addEventListener('DOMContentLoaded', () => {
    * shown. A refusal here is a normal answer, not an error -- nothing that
    * follows depends on it.
    */
+  // Somebody who already has a username is not asked for one again. It is
+  // kept in local storage across sign-out, and from 2.2.2 it also comes back
+  // with the repository, so a reinstall is not re-interrogated either.
+  const wizNameKnown = document.getElementById('wizNameKnown');
+  const wizNameGroup = document.getElementById('wizNameGroup');
+  let knownName = null;
+
   function grantOptional(wantsReporting) {
     const req = { permissions: ['notifications'], origins: [] };
     if (wantsReporting && Analytics.configured()) req.origins.push(Analytics.ORIGIN);
@@ -314,16 +322,114 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function finishConsent(optIn) {
-    // First, before any await: see grantOptional.
-    await grantOptional(optIn || wizPingToggle.classList.contains('on'));
-    // setEnabled writes the consent and, when on, creates the install id, so
-    // the id exists before the first event rather than on the first send.
-    await Analytics.setEnabled(optIn === true);
-    // Taken from the switch either way: "Not now" answers the reporting
-    // question, not this one, and the switch is on screen while it is clicked.
-    await Analytics.setPing(wizPingToggle.classList.contains('on'));
+    const ping = wizPingToggle.classList.contains('on');
+    const nameInput = document.getElementById('wizName');
+    const nameError = document.getElementById('wizNameError');
+    const next = document.getElementById('wizNext4');
+    const name = nameInput.value.trim();
+    nameInput.style.borderColor = '';
+    nameError.style.display = 'none';
+
+    // A name is required when the field is showing. Checked before anything
+    // is persisted, so an empty field costs a red border and nothing else.
+    if (!knownName && !name) {
+      nameInput.style.borderColor = 'var(--error)';
+      nameError.textContent = 'Pick a username to continue.';
+      nameError.style.display = 'block';
+      return;
+    }
+
+    // THE ORDER HERE IS THE FIX. 2.2.0 and 2.2.1 awaited the permission
+    // prompt first and saved the switches after, and for every new user the
+    // "after" never ran -- the names table filled up while the consent never
+    // arrived. So the switches are written first, without awaiting: a
+    // chrome.storage write is committed by the browser process and lands
+    // whether or not this page survives whatever the prompt does to it. The
+    // permission request follows in the same tick, so the click's activation
+    // still covers it. Only then does anything wait.
+    const persisted = Promise.all([
+      Analytics.setEnabled(optIn === true),
+      Analytics.setPing(ping),
+    ]);
+    const granted = grantOptional(optIn || ping);
+    await persisted;
+    const reachable = await granted;
+
+    // The username is claimed here, after the permission that lets the claim
+    // reach the server, and only when it is actually new.
+    if (name && name !== knownName) {
+      if (!reachable) {
+        // Declined. Not a trap: the name is simply not reserved, and Settings
+        // can claim one later once access is granted there.
+        nameError.textContent = 'Access to the LeetSync server was declined, so this '
+          + 'username was not reserved. You can set one later in Settings.';
+        nameError.style.display = 'block';
+      } else {
+        next.disabled = true;
+        next.textContent = 'Checking…';
+        const claim = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: 'CLAIM_NAME', name }, (res) => {
+            resolve(chrome.runtime.lastError ? { ok: false, reason: 'offline' } : res);
+          });
+        });
+        next.disabled = false;
+        next.textContent = 'Continue →';
+        if (!claim || !claim.ok) {
+          const reason = claim && claim.reason;
+          nameInput.style.borderColor = 'var(--error)';
+          nameError.textContent =
+            reason === 'taken' ? 'That username is already taken — pick another.'
+              : reason === 'invalid' ? ((claim && claim.detail) || 'That username is not valid.')
+                : reason === 'offline' ? 'Could not reach the server to check that name. Check your connection and try again.'
+                  : 'Could not reserve that username. Try again.';
+          nameError.style.display = 'block';
+          return;                        // consent is already saved; only the name is pending
+        }
+        knownName = name;
+      }
+    }
+
     if (optIn) Analytics.track('repo_setup', { detail: 'onboarding_complete' });
     wizGoTo(5);
+  }
+
+  /**
+   * Show the name we already have, if any, and hide the field.
+   *
+   * Runs at load (same machine, signed out and back in: the name is still in
+   * local storage) and again after the repository has been read on entering
+   * step 4 (fresh install, second machine: the name just arrived with the
+   * identity). Either way, somebody we know is not asked again.
+   */
+  async function paintKnownName() {
+    const name = await Analytics.displayName();
+    if (!name) return false;
+    knownName = name;
+    document.getElementById('wizName').value = name;
+    document.getElementById('wizKnownName').textContent = name;
+    wizNameKnown.style.display = 'flex';
+    wizNameGroup.style.display = 'none';
+    return true;
+  }
+
+  /**
+   * Entering step 4: find out who this is before asking.
+   *
+   * A read-only sync pulls the repository's document and, through
+   * DeviceSync.mergeIdentity, adopts the identity it holds -- which is how a
+   * reinstall or a second machine turns back into the same person rather than
+   * a new row on the leaderboard. Quiet if it fails: the field is simply left
+   * showing, and the person types a name as a new user would.
+   */
+  function prepareConsentStep() {
+    document.getElementById('wizNameError').style.display = 'none';
+    paintKnownName();
+    try {
+      chrome.runtime.sendMessage({ type: 'SYNC_DEVICES', write: false }, () => {
+        void chrome.runtime.lastError;
+        paintKnownName();
+      });
+    } catch (error) { /* offline, or the repository is not readable yet */ }
   }
 
   // Whatever the switch says when Continue is pressed. It starts on, and
@@ -332,21 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizNext4').addEventListener('click', () =>
     finishConsent(wizAnalyticsToggle.classList.contains('on')));
 
-  // Somebody who already has a username is not asked for one again. It is
-  // kept in local storage and survives signing out, so re-running setup on the
-  // same machine should not re-interrogate them.
-  const wizNameKnown = document.getElementById('wizNameKnown');
-  const wizNameGroup = document.getElementById('wizNameGroup');
-  let knownName = null;
-
-  Analytics.displayName().then((name) => {
-    if (!name) return;
-    knownName = name;
-    document.getElementById('wizName').value = name;
-    document.getElementById('wizKnownName').textContent = name;
-    wizNameKnown.style.display = 'flex';
-    wizNameGroup.style.display = 'none';
-  });
+  paintKnownName();
 
   document.getElementById('wizChangeName').addEventListener('click', () => {
     wizNameKnown.style.display = 'none';
@@ -382,88 +474,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target === tokenHelpModal) closeTokenHelp();
   });
 
+  // The token, and only the token. The username used to be asked here too,
+  // which meant asking for a leaderboard name before the leaderboard had been
+  // mentioned, and before the repository was known -- so a returning user
+  // could not be recognised and was asked again. It lives on step 4 now.
   document.getElementById('wizNext2').addEventListener('click', async () => {
     const tokenInput = document.getElementById('wizToken');
-    const nameInput = document.getElementById('wizName');
-    const nameError = document.getElementById('wizNameError');
-    const next = document.getElementById('wizNext2');
-
     const token = tokenInput.value.trim();
-    const name = nameInput.value.trim();
-
     tokenInput.style.borderColor = '';
-    nameInput.style.borderColor = '';
-    nameError.style.display = 'none';
-
     if (!token) {
       tokenInput.style.borderColor = 'var(--error)';
       return;
     }
-    if (!name) {
-      nameInput.style.borderColor = 'var(--error)';
-      nameError.textContent = 'Pick a username to continue.';
-      nameError.style.display = 'block';
-      return;
-    }
-
-    // One way out of this step, and it always saves the token first. Step 3
-    // reads it straight from storage, so a path that advances without writing
-    // it lands on "GitHub token not configured" -- which is what the shortcut
-    // below used to do, to exactly the returning users it exists to help.
-    const advance = async () => {
-      await new Promise(r => chrome.storage.sync.set({ githubToken: token }, r));
-      wizGoTo(3);
-    };
-
-    // Already theirs, and already claimed by this install. Re-claiming it
-    // would be a round trip to be told what is already true.
-    if (knownName && name === knownName) {
-      await advance();
-      return;
-    }
-
-    // The server that decides uniqueness is behind an optional permission,
-    // and this is the first call that needs it. So it is asked for here --
-    // first, before any other await, because this click is the gesture Chrome
-    // requires and an await ahead of it would lose that. (2.2.0 asked at step
-    // 4 instead, which left this claim refused and nobody able to pass it.)
-    //
-    // Declining is allowed. The name is simply not reserved, setup goes on,
-    // and Settings can claim one later once access is granted there.
-    if (!await Analytics.requestHost()) {
-      nameError.textContent = 'Access to the LeetSync server was declined, so this '
-        + 'username was not reserved. You can set one later in Settings.';
-      nameError.style.display = 'block';
-      await advance();
-      return;
-    }
-
-    // Uniqueness is decided by the server, so the answer has to be waited for
-    // rather than assumed — otherwise two people can walk away with the same
-    // name and only find out later.
-    next.disabled = true;
-    next.textContent = 'Checking…';
-    const claim = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'CLAIM_NAME', name }, (res) => {
-        resolve(chrome.runtime.lastError ? { ok: false, reason: 'offline' } : res);
-      });
-    });
-    next.disabled = false;
-    next.textContent = 'Next →';
-
-    if (!claim.ok) {
-      nameInput.style.borderColor = 'var(--error)';
-      nameError.textContent =
-        claim.reason === 'taken' ? 'That username is already taken — pick another.'
-          : claim.reason === 'invalid' ? (claim.detail || 'That username is not valid.')
-            : claim.reason === 'offline' ? 'Could not reach the server to check that name. Check your connection and try again.'
-              : 'Could not reserve that username. Try again.';
-      nameError.style.display = 'block';
-      return;
-    }
-
-    nameError.textContent = '';
-    await advance();
+    // Saved before moving on. Step 3 reads it straight from storage.
+    await new Promise(r => chrome.storage.sync.set({ githubToken: token }, r));
+    wizGoTo(3);
   });
 
   // Repo choice toggle
@@ -1163,6 +1188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function matchesChip(p, chip, now) {
     switch (chip) {
       case 'all': return true;
+      case 'history': return true;
       case 'struggled': return Number(p.attempts) > 1;
       case 'stale': {
         const at = solvedAt(p);
@@ -1190,6 +1216,11 @@ document.addEventListener('DOMContentLoaded', () => {
       filtered.sort((a, b) => (solvedAt(a) || 0) - (solvedAt(b) || 0));
     }
 
+    if (difficulty === 'history') {
+      renderHistory(filtered);
+      return;
+    }
+
     if (allProblems.length && !filtered.length) {
       const why = difficulty === 'struggled'
         ? 'Nothing took more than one attempt yet — attempts are recorded from now on.'
@@ -1215,6 +1246,89 @@ document.addEventListener('DOMContentLoaded', () => {
     problemFilters.difficulty = chip.dataset.filter;
     applyProblemFilters();
   });
+
+  /**
+   * Where a solved problem lives in the repository.
+   *
+   * `HEAD` rather than a branch name: the extension writes to whatever the
+   * repository's default branch is, and GitHub resolves HEAD to exactly that,
+   * so the link holds whether the repo was made with main or master. It
+   * points at the problem's folder, not one file -- the README and every
+   * attempt are in there, and the folder is what the extension actually owns.
+   */
+  function repoLinkFor(p, repo) {
+    if (!repo || !p || !p.folderName) return null;
+    return `https://github.com/${repo}/tree/HEAD/problems/${encodeURIComponent(p.folderName)}`;
+  }
+
+  /** "Today", "Yesterday", then the date. Same input the cards use. */
+  function dayLabel(iso, now) {
+    const d = Date.parse(iso || '');
+    if (!Number.isFinite(d)) return 'Unknown date';
+    const days = Math.floor((now - d) / 86400000);
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  /**
+   * The log. Newest solve first, grouped under the day it happened, and the
+   * repository link on every row rather than behind a click.
+   *
+   * `date` is the most recent push for that problem, which is the right
+   * clock for a history: re-solving something moves it back to the top,
+   * because that is when you last did it.
+   */
+  function renderHistory(problems) {
+    if (!problems || problems.length === 0) {
+      problemsList.innerHTML = '<div class="problems-empty">Nothing solved yet — this fills in as you push.</div>';
+      return;
+    }
+
+    const now = Date.now();
+    const sorted = problems.slice().sort((a, b) =>
+      (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
+
+    problemsList.innerHTML = '';
+    chrome.storage.sync.get(['githubRepo'], ({ githubRepo }) => {
+      let currentDay = null;
+      for (const p of sorted) {
+        const label = dayLabel(p.date, now);
+        if (label !== currentDay) {
+          currentDay = label;
+          const head = document.createElement('div');
+          head.className = 'history-day';
+          head.textContent = label;
+          problemsList.appendChild(head);
+        }
+
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        const diffClass = `difficulty-${(p.difficulty || 'easy').toLowerCase()}`;
+        const href = repoLinkFor(p, githubRepo);
+        row.innerHTML = `
+          <span class="problem-number">#${p.number}</span>
+          <div class="problem-info">
+            <div class="problem-title"></div>
+            <div class="problem-meta">
+              <span class="difficulty-badge ${diffClass}">${p.difficulty || '?'}</span>
+              <span class="problem-lang"></span>
+              ${Number(p.attempts) > 1 ? `<span class="problem-sol-count">${p.attempts} attempts</span>` : ''}
+            </div>
+          </div>
+          ${href
+            ? `<a class="history-link" target="_blank" rel="noopener noreferrer" title="Open in your repository">
+                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+               </a>`
+            : ''}`;
+        // Text, not markup: titles come from LeetCode.
+        row.querySelector('.problem-title').textContent = p.title || '';
+        row.querySelector('.problem-lang').textContent = p.language || '';
+        if (href) row.querySelector('.history-link').href = href;
+        problemsList.appendChild(row);
+      }
+    });
+  }
 
   function renderProblems(problems) {
     if (!problems || problems.length === 0) {

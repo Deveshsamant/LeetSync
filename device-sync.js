@@ -48,7 +48,38 @@ const DeviceSync = (() => {
       sheets: {},
       days: [],
       bests: {},
+      identity: null,
     };
+  }
+
+  /**
+   * Whose progress this is.
+   *
+   * A fresh install is a stranger to the analytics server: a new random id, a
+   * fresh username prompt, a second row on the leaderboard. But it is not a
+   * stranger to the repository -- it just connected one we may have written
+   * to for months. So the id and the name ride in the document, and:
+   *
+   *   - the EARLIEST id published for a repository is the identity. A second
+   *     machine, or a reinstall, adopts it rather than overwriting it, so the
+   *     identity is stable however many devices come and go;
+   *   - the LATEST rename wins, because a name change is a decision and the
+   *     other machine should follow it.
+   *
+   * Two different ids with a tie on `at` keep the left (local) side: identical
+   * clocks mean the order is unknowable, and keeping what this device already
+   * uses is the recoverable choice.
+   */
+  function mergeIdentity(a, b) {
+    const left = a && typeof a === 'object' && a.installId ? a : null;
+    const right = b && typeof b === 'object' && b.installId ? b : null;
+    if (!left) return right;
+    if (!right) return left;
+    if (left.installId === right.installId) {
+      const newer = num(right.nameAt) > num(left.nameAt) ? right : left;
+      return { ...left, name: newer.name || null, nameAt: num(newer.nameAt) };
+    }
+    return num(right.at) < num(left.at) ? right : left;
   }
 
   /**
@@ -120,6 +151,7 @@ const DeviceSync = (() => {
       sheets: cap(sheets, MAX_SHEETS),
       days,
       bests: highest(left.bests, right.bests),
+      identity: mergeIdentity(left.identity, right.identity),
     };
   }
 
@@ -169,10 +201,18 @@ const DeviceSync = (() => {
   }
 
   /** Local storage -> the shared document. `at` defaults to now for entries that have no date. */
-  function snapshot({ solvedProblems, streakData, achievements, pushCount, sheetTicks, deviceId }, now = Date.now()) {
+  function snapshot({ solvedProblems, streakData, achievements, pushCount, sheetTicks, deviceId, identity }, now = Date.now()) {
     const state = empty();
     state.updatedAt = now;
     if (deviceId) state.devices[deviceId] = { lastSeen: now };
+    if (identity && typeof identity === 'object' && identity.installId) {
+      state.identity = {
+        installId: String(identity.installId),
+        at: num(identity.at) || now,
+        name: identity.name ? String(identity.name) : null,
+        nameAt: num(identity.nameAt) || 0,
+      };
+    }
 
     for (const [key, p] of Object.entries(obj(solvedProblems))) {
       const at = Date.parse(p && (p.lastSolved || p.solvedAt || p.firstSolved)) || now;
@@ -215,7 +255,16 @@ const DeviceSync = (() => {
       .map(([key]) => key);
 
     const streak = deriveStreak(doc.days, today);
+    const identity = doc.identity && typeof doc.identity === 'object' && doc.identity.installId
+      ? {
+          installId: String(doc.identity.installId),
+          at: num(doc.identity.at),
+          name: doc.identity.name ? String(doc.identity.name) : null,
+          nameAt: num(doc.identity.nameAt),
+        }
+      : null;
     return {
+      identity,
       solvedProblems,
       achievements,
       sheetTicks,

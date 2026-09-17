@@ -700,15 +700,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_PROBLEMS') {
     chrome.storage.local.get(['solvedProblems'], (data) => {
       const problems = data.solvedProblems || {};
-      const list = Object.entries(problems).map(([key, p]) => ({
-        number: p.number || parseInt(key, 10),
-        title: p.title,
-        difficulty: p.difficulty,
-        language: p.language,
-        folderName: p.folderName,
-        date: p.date,
-        solutionCount: p.solutionCount || 1,
-      }));
+      // Everything the Solved tab reads. This projection lagged the record:
+      // 2.1.0 started storing attempts, tags, slug and firstSolvedOn, and the
+      // STRUGGLED chip and the Topics card filter on them -- but they were
+      // never sent, so both stayed empty for every user and the empty state
+      // blamed it on "recorded from now on". They are sent now.
+      const list = Object.entries(problems).map(([key, p]) => {
+        const number = p.number || parseInt(key, 10);
+        return {
+          number,
+          title: p.title,
+          difficulty: p.difficulty,
+          language: p.language,
+          // Records from before the folder was stored get it derived the same
+          // way the push derives it, so History can link every row.
+          folderName: p.folderName || (p.title ? buildFolderName(number, p.title) : null),
+          date: p.date,
+          firstSolvedOn: p.firstSolvedOn || null,
+          solutionCount: p.solutionCount || 1,
+          attempts: Number.isFinite(p.attempts) ? p.attempts : null,
+          tags: Array.isArray(p.tags) ? p.tags : [],
+          slug: p.slug || null,
+        };
+      });
       // Sort by number
       list.sort((a, b) => a.number - b.number);
       sendResponse({ success: true, problems: list });
@@ -1724,6 +1738,9 @@ async function localSnapshot() {
     pushCount: local.pushCount,
     sheetTicks: [...ticks],
     deviceId: await deviceId(),
+    // Read, not minted: a device that has never needed an id does not get one
+    // for publishing. If there is one, the repository learns whose it is.
+    identity: await Analytics.identity(),
   });
 
   const now = Date.now();
@@ -1736,6 +1753,13 @@ async function localSnapshot() {
 
 async function writeLocalState(merged) {
   const applied = DeviceSync.apply(merged);
+
+  // The merge has already decided whose identity this is -- the earliest one
+  // the repository ever saw. Adopting it here is what turns a reinstall, or a
+  // second machine, back into the same person on the leaderboard instead of
+  // a new row, and what lets setup say "Continuing as" instead of asking.
+  if (applied.identity) await Analytics.adoptIdentity(applied.identity);
+
   await chrome.storage.local.set({
     solvedProblems: applied.solvedProblems,
     achievements: applied.achievements,

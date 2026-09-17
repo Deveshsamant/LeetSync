@@ -144,3 +144,27 @@ test('popup: update banner dismissal is keyed by version, not a flag', () => {
   assert.ok(js.includes("'dismissedUpdate'"),
     'dismissedUpdate is written but never read back from storage');
 });
+
+test('GET_PROBLEMS sends every field the Solved tab reads', () => {
+  // The record grew (attempts, tags, slug, firstSolvedOn in 2.1.0) and the
+  // projection the popup receives did not, so the STRUGGLED chip and the
+  // Topics card filtered on fields that were never sent and stayed empty for
+  // everyone. Whatever the popup reads off a problem has to be in the
+  // projection; this reads both and compares.
+  const bg = read('background.js');
+  const start = bg.indexOf("message.type === 'GET_PROBLEMS'");
+  const end = bg.indexOf('sendResponse', start);
+  const projection = bg.slice(start, end);
+  const sent = new Set([...projection.matchAll(/^\s{10}(\w+)\s*[:,]/gm)].map(m => m[1]));
+
+  const popup = read('popup.js');
+  // Fields the Solved tab reads from a problem object `p`.
+  const wanted = ['number', 'title', 'difficulty', 'language', 'folderName', 'date',
+    'solutionCount', 'attempts', 'tags', 'firstSolvedOn'];
+  for (const field of wanted) {
+    assert.ok(new RegExp('\\bp\\.' + field + '\\b').test(popup),
+      `expected popup.js to read p.${field}; update this list if the tab changed`);
+    assert.ok(sent.has(field),
+      `popup.js reads p.${field} but the GET_PROBLEMS projection never sends it`);
+  }
+});

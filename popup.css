@@ -999,6 +999,48 @@ body.theme-light .problems-list { border: 0; border-top: 2px solid var(--bd); bo
 .problem-card:last-child { border-bottom: 0; }
 body.theme-light .problem-card { border-bottom-width: 2px; border-bottom-color: var(--bd-soft); }
 
+/* History: the log view of the Solved tab. Day headings, then compact rows
+   with the repository link on every one. */
+.history-day {
+  font-family: var(--f-label);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tx-5);
+  padding: 12px 13px 5px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.history-day:first-child { padding-top: 8px; }
+body.theme-light .history-day { font-weight: 600; color: var(--tx-4); padding-left: 16px; }
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--bd-hair);
+}
+.history-row:last-child { border-bottom: 0; }
+.history-row:hover { background: var(--bg-hover); }
+body.theme-light .history-row { padding: 10px 16px; border-bottom-width: 2px; border-bottom-color: var(--bd-soft); }
+
+.history-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--tx-4);
+  border-radius: 6px;
+  transition: color .15s, background .15s;
+}
+.history-link:hover { color: var(--ac); background: var(--ac-soft); }
+body.theme-light .history-link { border-radius: 0; }
+
 .problem-header {
   display: flex;
   align-items: center;

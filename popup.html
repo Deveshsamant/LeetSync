@@ -56,22 +56,6 @@
             <div class="form-hint" id="wizTokenKind" style="display:none;margin-top:7px;"></div>
           </div>
 
-          <div class="wizard-known" id="wizNameKnown" style="display:none;">
-            <span>Continuing as <strong id="wizKnownName"></strong></span>
-            <button type="button" id="wizChangeName">Change</button>
-          </div>
-
-          <div class="form-group" id="wizNameGroup" style="margin-top:14px;">
-            <label class="form-label" for="wizName">Username</label>
-            <input type="text" id="wizName" maxlength="24" placeholder="John"
-                   autocomplete="off" spellcheck="false" />
-            <div class="form-hint" style="margin-top:6px;">
-              3–24 characters, and unique across LeetSync users — checking that
-              sends just this name to LeetSync's server, nothing else. It labels
-              you in usage reporting if you turn that on later.
-            </div>
-            <div id="wizNameError" class="status-message status-error" style="display:none;margin-top:8px;"></div>
-          </div>
         </div>
         <div class="wizard-actions">
           <div class="wizard-nav">
@@ -166,6 +150,27 @@
                     role="switch" aria-checked="true" aria-label="Count me as an active user">
               <span class="toggle-knob"></span>
             </button>
+          </div>
+
+
+          <!-- Shown once the repository has been read. A name that came back
+               from it means this is somebody we know, and they are not asked
+               again. Sits after the switches because it is the leaderboard
+               name, and the switches are what put somebody on the leaderboard. -->
+          <div class="wizard-known" id="wizNameKnown" style="display:none;margin-top:14px;">
+            <span>Continuing as <strong id="wizKnownName"></strong></span>
+            <button type="button" id="wizChangeName">Change</button>
+          </div>
+
+          <div class="form-group" id="wizNameGroup" style="margin-top:14px;">
+            <label class="form-label" for="wizName">Your name on the leaderboard</label>
+            <input type="text" id="wizName" maxlength="24" placeholder="John"
+                   autocomplete="off" spellcheck="false" />
+            <div class="form-hint" style="margin-top:6px;">
+              3–24 characters, unique across LeetSync users. Checking that sends
+              just this name to LeetSync's server.
+            </div>
+            <div id="wizNameError" class="status-message status-error" style="display:none;margin-top:8px;"></div>
           </div>
 
           <!-- Folded by default. Every line of it was on screen at once,
@@ -438,6 +443,7 @@
           <button class="filter-chip" data-filter="hard">HARD</button>
           <button class="filter-chip" data-filter="struggled" title="Took more than one attempt">STRUGGLED</button>
           <button class="filter-chip" data-filter="stale" title="Solved over 30 days ago">STALE</button>
+          <button class="filter-chip" data-filter="history" title="Everything you solved, newest first, with a link to each solution">HISTORY</button>
         </div>
         <div class="problems-list" id="problemsList"></div>
       </div>
