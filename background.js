@@ -439,9 +439,18 @@ async function pushToGitHub(problemData) {
     solvedProblems,
   });
 
-  // Update streak and check achievements
-  await updateStreak();
-  await checkAchievements();
+  // Everything above this line put the solve on GitHub. Streak and
+  // achievements are bookkeeping ABOUT the push, and a fault in them must not
+  // be reported as the push failing: in 2.2.0-2.2.3 one did, on every new
+  // user's first solve, and the popup told them "This submission was not
+  // saved" about a file that was already in their repository -- which invites
+  // a re-submit and a duplicate sol2.
+  try {
+    await updateStreak();
+    await checkAchievements();
+  } catch (error) {
+    console.warn('[LeetSync] Pushed, but post-push bookkeeping failed:', error);
+  }
 
   return {
     success: true,
@@ -2150,7 +2159,7 @@ async function checkStreakReminder() {
   const hour = new Date().getHours();
   // Only remind in the evening (6 PM - 11 PM)
   if (hour >= 18 && hour <= 23) {
-    notify('streakReminder', {
+    showNotification('streakReminder', {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: `🔥 Don't break your ${streak.currentStreak}-day streak!`,
@@ -2201,7 +2210,10 @@ const ACHIEVEMENT_DEFS = [
  * A refusal costs the notification and nothing else: the achievement is still
  * unlocked, the streak is still counted, and the popup still shows both.
  */
-function notify(id, options) {
+// Named so nothing else can shadow it. It was `notify` in 2.2.0-2.2.3, and
+// checkAchievements takes a `notify` option -- so inside that function the
+// name meant the boolean, and calling it threw on every first unlock.
+function showNotification(id, options) {
   if (!chrome.notifications || !chrome.notifications.create) return;
   try {
     chrome.notifications.create(id, options);
@@ -2256,7 +2268,7 @@ async function checkAchievements({ notify = true } = {}) {
 
   // Notify for new achievements
   for (const ach of (notify ? newlyUnlocked : [])) {
-    notify(`achievement_${ach.id}`, {
+    showNotification(`achievement_${ach.id}`, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: `🏆 Achievement Unlocked!`,

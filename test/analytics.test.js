@@ -204,11 +204,11 @@ test('optional permissions are never assumed present', () => {
   const bare = background.split('\n').filter(
     line => /chrome\.notifications\.create\(/.test(line)
       && !/if \(!chrome\.notifications/.test(line));
-  // The one inside notify() is guarded by the line above it; anything else is
+  // The one inside showNotification() is guarded by the line above it; anything else is
   // an unguarded call site.
   assert.equal(bare.length, 1,
-    `expected notifications to be reached only through notify(); found ${bare.length}`);
-  assert.match(background, /function notify\(/,
+    `expected notifications to be reached only through showNotification(); found ${bare.length}`);
+  assert.match(background, /function showNotification\(/,
     'background.js must funnel notifications through a guarded helper');
 });
 
