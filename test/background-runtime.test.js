@@ -1,8 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
-const vm = require('node:vm');
 
 /**
  * Runs the real service worker in a sandbox.
@@ -16,92 +13,8 @@ const vm = require('node:vm');
  * the extension APIs, and calls the functions for real.
  */
 
-const ROOT = join(__dirname, '..');
-
-/** A chrome.* stand-in: real storage, everything else absorbed. */
-function makeChrome(local = {}, sync = {}) {
-  const calls = [];
-  const area = (bag) => ({
-    get(keys, cb) {
-      const list = keys == null ? Object.keys(bag)
-        : Array.isArray(keys) ? keys
-          : typeof keys === 'string' ? [keys] : Object.keys(keys);
-      const out = Object.fromEntries(list.filter(k => k in bag).map(k => [k, bag[k]]));
-      if (cb) { cb(out); return undefined; }
-      return Promise.resolve(out);
-    },
-    set(obj, cb) { Object.assign(bag, obj); if (cb) cb(); return Promise.resolve(); },
-    remove(keys, cb) {
-      (Array.isArray(keys) ? keys : [keys]).forEach(k => delete bag[k]);
-      if (cb) cb(); return Promise.resolve();
-    },
-  });
-
-  // Anything not modelled: a function that records its call and resolves.
-  const absorb = (path) => new Proxy(function () {}, {
-    get: (_t, key) => (key === 'then' ? undefined : absorb(`${path}.${String(key)}`)),
-    apply: (_t, _this, args) => {
-      calls.push({ path, args });
-      // A listener is registered, not called: invoking it here would fire
-      // onAlarm with no alarm. Anything else taking a function is the
-      // callback form of a query, which answers "nothing".
-      const cb = args.find(a => typeof a === 'function');
-      if (cb && !path.endsWith('.addListener')) cb(undefined);
-      return Promise.resolve(undefined);
-    },
-  });
-
-  const chrome = new Proxy({
-    storage: { local: area(local), sync: area(sync) },
-    runtime: {
-      lastError: undefined,
-      getManifest: () => ({ version: '0.0.0-test' }),
-      getURL: (p) => p,
-      onMessage: { addListener() {} },
-      onInstalled: { addListener() {} },
-      onStartup: { addListener() {} },
-      sendMessage() {},
-    },
-    notifications: {
-      create: (...args) => { calls.push({ path: 'chrome.notifications.create', args }); },
-    },
-    permissions: {
-      contains: (q, cb) => (cb ? cb(false) : Promise.resolve(false)),
-      request: (q, cb) => (cb ? cb(false) : Promise.resolve(false)),
-    },
-  }, { get: (t, key) => (key in t ? t[key] : absorb(`chrome.${String(key)}`)) });
-
-  return { chrome, calls, local, sync };
-}
-
-function loadWorker(env) {
-  const context = vm.createContext({
-    chrome: env.chrome,
-    console: { log() {}, warn() {}, error() {}, info() {} },
-    setTimeout, clearTimeout, setInterval, clearInterval,
-    fetch: () => Promise.reject(new Error('network disabled in tests')),
-    crypto: globalThis.crypto,
-    TextEncoder, TextDecoder, URL, URLSearchParams, AbortController,
-    btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
-    atob: (s) => Buffer.from(s, 'base64').toString('binary'),
-    self: undefined,
-  });
-  context.self = context;
-  context.importScripts = (...files) => {
-    for (const f of files) vm.runInContext(readFileSync(join(ROOT, f), 'utf8'), context, { filename: f });
-  };
-  vm.runInContext(readFileSync(join(ROOT, 'background.js'), 'utf8'), context, { filename: 'background.js' });
-  return context;
-}
-
-const firstSolve = () => ({
-  solvedProblems: {
-    1: { number: 1, title: 'Two Sum', difficulty: 'Easy', language: 'C++',
-         date: new Date().toISOString().slice(0, 10) },
-  },
-  streakData: { currentStreak: 1, longestStreak: 1, solveHistory: [new Date().toISOString().slice(0, 10)] },
-  pushCount: 1,
-});
+const { makeChrome, loadWorker, fakeGitHub, loadWorkerWithGitHub, firstSolve, twoSum } =
+  require('./helpers/worker.js');
 
 test('a new user s first solve unlocks achievements without throwing', async () => {
   // The exact 2.2.0-2.2.3 failure: nothing unlocked yet, one problem solved,
@@ -147,68 +60,6 @@ test('without the notifications permission, unlocking still succeeds', async () 
   assert.ok(unlocked.length > 0);
 });
 
-// ── The first push, end to end ────────────────────────────────
-
-/**
- * A GitHub that starts empty and remembers what is committed to it. GETs of
- * anything not yet written answer 404, which is what a brand-new user's
- * repository looks like; PUTs are recorded and then readable.
- */
-function fakeGitHub() {
-  const files = new Map();
-  const commits = [];
-  const fetch = async (url, init = {}) => {
-    const method = (init.method || 'GET').toUpperCase();
-    const path = new URL(url).pathname;
-    const json = (body, status = 200) => new Response(JSON.stringify(body), {
-      status, headers: { 'content-type': 'application/json' },
-    });
-    const m = path.match(/^\/repos\/[^/]+\/[^/]+\/contents\/(.+)$/);
-    if (m) {
-      const file = decodeURIComponent(m[1]);
-      if (method === 'PUT') {
-        const body = JSON.parse(init.body);
-        files.set(file, body.content);
-        commits.push({ file, message: body.message });
-        return json({ content: { path: file, sha: `sha-${commits.length}` }, commit: { sha: `c-${commits.length}` } }, 201);
-      }
-      if (files.has(file)) return json({ path: file, sha: 'sha-existing', content: files.get(file), encoding: 'base64' });
-      // A folder listing for a folder that has files under it.
-      const children = [...files.keys()].filter(f => f.startsWith(file + '/'));
-      if (children.length) return json(children.map(f => ({ name: f.slice(file.length + 1), path: f, type: 'file', sha: 'x' })));
-      return json({ message: 'Not Found' }, 404);
-    }
-    if (/^\/repos\/[^/]+\/[^/]+$/.test(path)) return json({ default_branch: 'main', private: false });
-    return json({ message: 'Not Found' }, 404);
-  };
-  return { fetch, files, commits };
-}
-
-function loadWorkerWithGitHub(env, gh) {
-  const context = vm.createContext({
-    chrome: env.chrome,
-    console: { log() {}, warn() {}, error() {}, info() {} },
-    setTimeout, clearTimeout, setInterval, clearInterval,
-    fetch: gh.fetch, Response, Headers,
-    crypto: globalThis.crypto,
-    TextEncoder, TextDecoder, URL, URLSearchParams, AbortController,
-    btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
-    atob: (s) => Buffer.from(s, 'base64').toString('binary'),
-  });
-  context.self = context;
-  context.importScripts = (...files) => {
-    for (const f of files) vm.runInContext(readFileSync(join(ROOT, f), 'utf8'), context, { filename: f });
-  };
-  vm.runInContext(readFileSync(join(ROOT, 'background.js'), 'utf8'), context, { filename: 'background.js' });
-  return context;
-}
-
-const twoSum = {
-  number: 1, title: 'Two Sum', difficulty: 'Easy', tags: ['Array', 'Hash Table'],
-  description: '<p>Given an array of integers…</p>', url: 'https://leetcode.com/problems/two-sum/',
-  language: 'C++', code: 'class Solution {\npublic:\n  vector<int> twoSum() { return {}; }\n};\n',
-  runtime: '0 ms', memory: '12 MB', timestamp: Date.now(),
-};
 
 test('a brand-new user s first push succeeds, commits, and unlocks', async () => {
   // Nothing solved, nothing unlocked, an empty repository: the first thing
@@ -239,4 +90,105 @@ test('a fault after the commit does not turn the push into a failure', async () 
   const result = await worker.pushToGitHub(twoSum);
   assert.equal(result.success, true);
   assert.ok(gh.commits.length > 0);
+});
+
+// ── Setups that pass a read and fail a write ──────────────────
+//
+// A user on 2.2.4 finished setup and then failed every push, two seconds in,
+// as push_fail/other. A classic token without the repo scope reads any public
+// repository and gets 404 on every write; so does a repository that was typed
+// wrong, or one a fine-grained token was never granted. Setup let all three
+// through, and the 404 was filed as "other" -- not queued, so the solve was
+// lost.
+
+const ghEnv = (token = 'ghp_test') =>
+  makeChrome({}, { githubToken: token, githubRepo: 'someone/leetcode-solutions' });
+
+test('a write GitHub refuses is explained, and the solve is kept', async () => {
+  const env = ghEnv();
+  const gh = fakeGitHub({ scopes: 'read:user', writable: false });
+  const worker = loadWorkerWithGitHub(env, gh);
+
+  const error = await worker.pushToGitHub(twoSum).then(() => null, e => e);
+  assert.ok(error, 'the push should fail');
+  assert.equal(error.reason, 'write');
+  assert.match(error.message, /repo scope/, 'a missing scope should be named as the cause');
+
+  const failure = worker.classifyPushError(error);
+  assert.equal(failure.kind, 'auth');
+  assert.equal(failure.status, '404');
+  assert.equal(failure.recoverable, true, 'the solve must be queued, not dropped');
+});
+
+test('a write to a repository the token cannot see says so', async () => {
+  // Fine-grained: no scope header, so the message cannot blame the scope.
+  const env = ghEnv('github_pat_test');
+  const gh = fakeGitHub({ writable: false });
+  const worker = loadWorkerWithGitHub(env, gh);
+  const error = await worker.pushToGitHub(twoSum).then(() => null, e => e);
+  assert.equal(error.reason, 'write');
+  assert.match(error.message, /does not exist|not allowed to write/);
+  assert.equal(worker.classifyPushError(error).recoverable, true);
+});
+
+test('setup refuses a repository the token cannot write to', async () => {
+  const cases = [
+    // [token, fake options, expected success, expected reason]
+    ['ghp_x', { scopes: 'read:user' }, false, 'scope'],
+    ['ghp_x', { scopes: '' }, false, 'scope'],
+    ['ghp_x', { scopes: 'repo:status' }, false, 'scope'],   // not "repo"
+    ['ghp_x', { scopes: 'repo, read:user' }, true, null],
+    ['ghp_x', { scopes: 'public_repo' }, true, null],        // public repository
+    ['ghp_x', { scopes: 'public_repo', isPrivate: true }, false, 'scope'],
+    ['github_pat_x', {}, true, null],                        // write grant unknowable here
+    ['ghp_x', { scopes: 'repo', exists: false }, false, 'missing'],
+    ['github_pat_x', { exists: false }, false, 'missing'],
+  ];
+  for (const [token, opts, ok, reason] of cases) {
+    const env = ghEnv(token);
+    const worker = loadWorkerWithGitHub(env, fakeGitHub(opts));
+    const result = await worker.verifyRepoAccess('someone/leetcode-solutions');
+    const label = `${token} ${JSON.stringify(opts)}`;
+    assert.equal(result.success, ok, `${label}: ${result.error || 'ok'}`);
+    if (!ok) {
+      assert.equal(result.reason, reason, label);
+      assert.ok(result.error && result.error.length > 20, `${label}: the error must say what to do`);
+    }
+  }
+});
+
+test('setup does not accept a malformed repository name', async () => {
+  const worker = loadWorkerWithGitHub(ghEnv(), fakeGitHub({ scopes: 'repo' }));
+  for (const bad of ['', 'leetcode-solutions', 'a/b/c', 'owner/ repo']) {
+    const result = await worker.verifyRepoAccess(bad);
+    assert.equal(result.success, false, `accepted ${JSON.stringify(bad)}`);
+  }
+});
+
+test('the automatic setup will not adopt a repository it cannot write to', async () => {
+  // Classic token with no scopes, and leetcode-solutions already exists and is
+  // public: 2.2.4 adopted it on a successful read.
+  const env = ghEnv();
+  const worker = loadWorkerWithGitHub(env, fakeGitHub({ scopes: '' }));
+  const result = await worker.ensureRepo('leetcode-solutions');
+  assert.equal(result.success, false);
+  assert.equal(result.reason, 'scope');
+  assert.equal(env.sync.githubRepo, 'someone/leetcode-solutions',
+    'the stored repo is only the preset; ensureRepo must not have re-saved it');
+});
+
+test('failures are classified with a status, and timeouts are queued', () => {
+  const worker = loadWorker(makeChrome());
+  const c = (msg, extra = {}) => worker.classifyPushError(Object.assign(new Error(msg), extra));
+
+  assert.deepEqual(
+    (({ kind, status, recoverable }) => ({ kind, status, recoverable }))(c('Request timed out. Check your internet connection.')),
+    { kind: 'network', status: 'net', recoverable: true },
+    'a timeout used to be filed as other and dropped');
+  assert.equal(c('GitHub API error (422): Invalid request').kind, 'other');
+  assert.equal(c('GitHub API error (422): Invalid request').status, '422');
+  assert.equal(c('GitHub API error (422): Invalid request').recoverable, false);
+  assert.equal(c('GitHub refused the request (403). Check the token').kind, 'auth');
+  assert.equal(c('GitHub rate limit reached. Try again shortly.').status, 'rate');
+  assert.equal(c("Cannot read properties of undefined (reading 'x')").status, 'js');
 });

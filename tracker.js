@@ -384,7 +384,8 @@ $('tkExpand').addEventListener('click', (e) => {
   ]);
   solvedIds = solved;
   manualDone = ticks;
-  applyTheme(sync.uiTheme || 'dark');
+  // Modernist until someone chooses, matching the popup.
+  applyTheme(sync.uiTheme || 'light');
 
   const wanted = decodeURIComponent(location.hash.slice(1)) || sync.activeSheet;
   sheet = data.sheets.find((s) => s.id === wanted) || data.sheets[0];

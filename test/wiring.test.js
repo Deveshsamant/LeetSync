@@ -168,3 +168,28 @@ test('GET_PROBLEMS sends every field the Solved tab reads', () => {
       `popup.js reads p.${field} but the GET_PROBLEMS projection never sends it`);
   }
 });
+
+test('setup verifies an existing repository before saving it', () => {
+  // The "use existing" branch saved whatever was typed after checking only
+  // for a slash. A typo, a missing repository, or a token that could not
+  // write to it all finished setup and then failed every push.
+  const popup = read('popup.js');
+  const save = popup.indexOf('chrome.storage.sync.set({ githubRepo: repo }');
+  assert.ok(save > 0, 'existing-repo save not found');
+  const branch = popup.slice(popup.lastIndexOf('} else {', save), save);
+  assert.match(branch, /type: 'VERIFY_REPO'/, 'the existing-repo branch saves without verifying');
+  assert.match(branch, /if \(!access \|\| !access\.success\)[\s\S]*return;/,
+    'a failed verification must stop before the save');
+});
+
+test('new installs start in Modernist; a stored theme is kept', () => {
+  const popup = read('popup.js');
+  assert.match(popup, /const NEW_USER_UI_THEME = 'light';/);
+  assert.match(popup, /if \(themeName == null \|\| themeName === ''\) return NEW_USER_UI_THEME;/,
+    'nothing stored must mean the new-user theme');
+  // The baseline must stay dark: it is the :root palette and needs no class,
+  // and flipping it would leave Modernist without its class.
+  assert.match(popup, /const DEFAULT_UI_THEME = 'dark';/);
+  assert.match(read('tracker.js'), /applyTheme\(sync\.uiTheme \|\| 'light'\)/,
+    'the tracker must agree with the popup for an install that has not chosen');
+});

@@ -104,6 +104,13 @@
     ],
     "2.2.4": [
       "Fixed: a new user's first push said \"Push to GitHub failed\" even though the solution had been committed. Your repository has it — you do not need to re-submit"
+    ],
+    "2.2.5": [
+      "Setup now checks that your token can actually write to the repository before it finishes. A misspelt repository, one that does not exist, or a token without write access used to pass setup and then fail every push",
+      "If GitHub refuses a write, the solve is kept and pushed as soon as you fix the token or the repository name — it used to be lost",
+      "You can paste the repository's GitHub URL during setup; LeetSync takes owner/repo out of it",
+      "Fixed: a push that timed out was dropped instead of queued",
+      "New installs start in the Modernist theme. If you have already chosen one, nothing changes"
     ]
   }
 }

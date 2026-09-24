@@ -611,9 +611,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
     } else {
-      const repo = document.getElementById('wizRepo').value.trim();
+      // People paste the URL. Take owner/repo out of it rather than refuse it.
+      const repo = document.getElementById('wizRepo').value.trim()
+        .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+        .replace(/\.git$/i, '')
+        .replace(/\/+$/, '');
+      document.getElementById('wizRepo').value = repo;
       if (!repo || !repo.includes('/')) {
         wizError.textContent = 'Enter repo as owner/repo-name';
+        wizError.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Finish Setup ✨';
+        return;
+      }
+
+      // Checked before it is saved. This branch used to accept anything with
+      // a slash in it, and a typo, a missing repository or a token without
+      // write access all finished setup and then failed every push.
+      btn.textContent = 'Checking…';
+      const access = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'VERIFY_REPO', repo }, (res) => {
+          resolve(chrome.runtime.lastError ? { success: false, error: 'Could not reach the extension. Try again.' } : res);
+        });
+      });
+      if (!access || !access.success) {
+        wizError.textContent = (access && access.error) || 'Could not verify that repository.';
         wizError.style.display = 'block';
         btn.disabled = false;
         btn.textContent = 'Finish Setup ✨';
@@ -1020,11 +1042,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // EXTENSION UI THEME (cards)
   // ═══════════════════════════════════════════════════════════
   const UI_THEMES = ['dark', 'light'];
+  // Two different jobs, which used to be one constant. The BASELINE is the
+  // palette on :root and needs no class. The NEW-USER theme is what an install
+  // gets before it has ever chosen: Modernist. loadUITheme writes whatever it
+  // applies back to storage, so every existing install already has a theme
+  // stored and keeps it -- this only reaches installs with nothing stored.
   const DEFAULT_UI_THEME = 'dark';
+  const NEW_USER_UI_THEME = 'light';
 
   // Themes retired in the redesign (dark-pro, glassmorphic, gaming-arcade,
-  // cyberpunk, ocean, sakura) fall back to dark.
+  // cyberpunk, ocean, sakura) fall back to dark: those people chose a dark
+  // theme. Nothing stored at all means nobody has chosen yet.
   function normalizeUITheme(themeName) {
+    if (themeName == null || themeName === '') return NEW_USER_UI_THEME;
     return UI_THEMES.includes(themeName) ? themeName : DEFAULT_UI_THEME;
   }
 
@@ -2819,16 +2849,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showErrorScreen(err) {
+    const isWrite = err.reason === 'write';
     const isAuth = err.kind === 'auth';
     const isNet = err.kind === 'network';
     const repo = (repoInput.value || '').trim() || 'your repository';
 
-    document.getElementById('errBadge').textContent = isAuth ? 'AUTH EXPIRED' : 'SYNC FAILED';
-    document.getElementById('errTitle').textContent = isAuth
-      ? 'GitHub authentication expired'
-      : isNet ? 'No connection to GitHub' : 'Push to GitHub failed';
+    document.getElementById('errBadge').textContent = isWrite ? 'CAN\u2019T WRITE'
+      : isAuth ? 'AUTH EXPIRED' : 'SYNC FAILED';
+    document.getElementById('errTitle').textContent = isWrite
+      ? 'GitHub would not let LeetSync write'
+      : isAuth ? 'GitHub authentication expired'
+        : isNet ? 'No connection to GitHub' : 'Push to GitHub failed';
 
-    document.getElementById('errDesc').innerHTML = isAuth
+    document.getElementById('errDesc').innerHTML = isWrite
+      ? `The token cannot write to <strong>${repo}</strong> \u2014 the repository is misspelt or missing, or the token lacks write access. The message below says which.`
+      : isAuth
       ? `Your personal access token was revoked or timed out, so the push to <strong>${repo}</strong> was rejected.`
       : isNet
         ? `LeetSync could not reach GitHub, so the push to <strong>${repo}</strong> did not complete.`

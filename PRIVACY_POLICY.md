@@ -1,6 +1,6 @@
 # Privacy Policy — LeetSync
 
-**Last updated:** September 17, 2026
+**Last updated:** September 24, 2026
 
 ## Summary
 
@@ -114,8 +114,10 @@ about whether the extension works.
   reports, and how many test cases passed
 - **Problems you push**: the LeetCode problem title, slug, difficulty, the
   language used, and the length of the solution in characters
-- Whether a push succeeded, and if it failed, a category only
-  (`auth`, `network`, or `other`)
+- Whether a push succeeded, and if it failed, a category (`auth`,
+  `network`, or `other`) and the HTTP status code GitHub answered with, such
+  as `404` — never the error message, which can contain your repository's
+  name
 
 ### The leaderboard is public
 

@@ -6,7 +6,11 @@ package is the most common cause of a rejection.
 
 ## Current package
 
-**2.2.4** — `store/dist/leetsync-2.2.4.zip`. Hotfix: every new user's first
+**2.2.5** — `store/dist/leetsync-2.2.5.zip`. Setup confirms the token can write
+to the repository before finishing; a refused write is queued, not lost; new
+installs start in Modernist. Nothing on the Listing or Privacy tabs changes.
+
+**2.2.4** — hotfix: every new user's first
 push reported failure after it had committed (a name clash in the achievement
 notifier). Nothing on the Listing or Privacy tabs changes.
 

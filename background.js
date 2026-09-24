@@ -154,6 +154,26 @@ async function githubAPI(endpoint, options = {}) {
         ? `GitHub refused to create the repository (403). ${errorMsg}`
         : `GitHub refused the request (403). Check the token has Contents: Read and write on this repository. ${errorMsg}`);
     }
+    // A 404 on a WRITE is never "no such file" -- that is what a read means.
+    // It is GitHub declining to admit the repository exists to this token,
+    // which is one of three setup mistakes, and every one of them is fixable
+    // without losing the solve. So it says which, and it is marked so the
+    // caller queues it rather than dropping it.
+    const method = String(options.method || 'GET').toUpperCase();
+    if (response.status === 404 && method !== 'GET' && /^\/repos\/[^/]+\/[^/]+/.test(endpoint)) {
+      const repo = endpoint.split('/').slice(2, 4).join('/');
+      const scopes = response.headers.get('x-oauth-scopes');
+      const noRepoScope = scopes !== null
+        && !scopes.split(',').map(s => s.trim()).includes('repo');
+      const error = new Error(noRepoScope
+        ? `GitHub refused to write to ${repo} (404): this token does not have the repo scope. `
+          + 'Create a classic token with "repo" ticked and paste it in Settings.'
+        : `GitHub refused to write to ${repo} (404): either the repository does not exist, `
+          + 'or this token is not allowed to write to it. Check the repository name in '
+          + 'Settings, and that the token has access to it.');
+      error.reason = 'write';
+      throw error;
+    }
     throw new Error(`GitHub API error (${response.status}): ${errorMsg}`);
   }
 
@@ -588,23 +608,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch(async (error) => {
         console.error('[LeetSync] Push failed:', error);
-        // Check if it's a network error — queue for later
-        const isNetworkError = error.message.includes('Failed to fetch') ||
-                               error.message.includes('NetworkError') ||
-                               error.message.includes('network') ||
-                               error.message.includes('timeout') ||
-                               error.message.includes('aborted');
-        // 401/403 and rate limits are recoverable once the user reconnects, so
-        // the submission is queued rather than dropped.
-        const isAuthError = /\(401\)|\(403\)|rate limit|bad credentials/i.test(error.message);
-        const recoverable = isNetworkError || isAuthError;
+        const failure = classifyPushError(error);
+        const isNetworkError = failure.kind === 'network';
+        const isAuthError = failure.kind === 'auth';
+        const recoverable = failure.recoverable;
 
         if (recoverable) await addToOfflineQueue(message.data);
 
-        // Only the category, never the message: GitHub errors embed the
-        // repository path, which must not leave the device.
+        // The category and the HTTP status, never the message: GitHub errors
+        // embed the repository path, which must not leave the device. The
+        // status is what makes an unfamiliar failure diagnosable from the
+        // dashboard -- "other" alone was not.
         report('push_fail', {
-          detail: isAuthError ? 'auth' : isNetworkError ? 'network' : 'other',
+          detail: `${failure.kind}:${failure.status}`,
           difficulty: message.data?.difficulty,
           language: message.data?.language,
         });
@@ -615,7 +631,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             message: error.message,
             title: message.data?.title || null,
             language: message.data?.language || null,
-            kind: isAuthError ? 'auth' : isNetworkError ? 'network' : 'other',
+            kind: failure.kind,
+            reason: failure.reason,
             queued: recoverable,
             at: new Date().toISOString(),
           },
@@ -885,6 +902,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Find or create the solutions repo from the token alone
+  // Setup's "use existing" path. It used to save what was typed after
+  // checking only for a slash.
+  if (message.type === 'VERIFY_REPO') {
+    verifyRepoAccess(message.repo)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message.type === 'ENSURE_REPO') {
     ensureRepo(message.repoName, message.isPrivate)
       .then((result) => sendResponse(result))
@@ -1403,6 +1429,115 @@ async function addFriend(username, repoName) {
 /**
  * Test the GitHub connection — fast, direct, no retries.
  */
+/**
+ * What kind of push failure this is, and whether the solve can be kept.
+ *
+ *   auth     401, 403, a rate limit, or a write GitHub answered with 404 --
+ *            all fixed by the user, so the solve is queued until they do
+ *   network  no answer at all -- queued
+ *   other    anything else -- not queued, because retrying will not help
+ *
+ * `status` is the HTTP code, or `net` / `rate` / `js` when there was none. It
+ * is what gets reported; the message never is.
+ */
+function classifyPushError(error) {
+  const message = String((error && error.message) || error || '');
+  const code = (message.match(/\((\d{3})\)/) || [])[1] || null;
+  const write = Boolean(error && error.reason === 'write');
+  // "Request timed out" contains neither "timeout" nor "network", and was
+  // being filed as other -- dropped, not queued.
+  const network = !code
+    && /failed to fetch|networkerror|network error|timed out|timeout|aborted|could not reach/i.test(message);
+  const rate = /rate limit/i.test(message);
+  const auth = write || rate || code === '401' || code === '403' || /bad credentials/i.test(message);
+  const kind = auth ? 'auth' : network ? 'network' : 'other';
+  return {
+    kind,
+    reason: write ? 'write' : null,
+    status: code || (network ? 'net' : rate ? 'rate' : 'js'),
+    recoverable: auth || network,
+  };
+}
+
+/**
+ * Can this token write to this repository?
+ *
+ * One request. Setup used to save a repository after checking only that the
+ * name contained a slash, and the automatic path adopted an existing
+ * repository after checking only that it could be read -- and a classic token
+ * with no scopes can read any public repository. Both reached a first push
+ * that GitHub answered with 404, two seconds in, and the solve was lost.
+ *
+ * What it can know:
+ *   - existence and visibility: a 404 here means missing, misspelt, or not
+ *     granted to this token -- GitHub will not say which;
+ *   - for classic and OAuth tokens, the scopes: GitHub lists them in
+ *     X-OAuth-Scopes on every response, and writing needs `repo` (or
+ *     `public_repo` for a public repository).
+ * What it cannot: a fine-grained token's per-repository write grant. That
+ * surfaces on the first push as a 403 whose message already says to add
+ * Contents: Read and write, and the push is queued rather than lost.
+ */
+async function verifyRepoAccess(repo) {
+  const { githubToken: token } = await chrome.storage.sync.get(['githubToken']);
+  if (!token) return { success: false, reason: 'token', error: 'No token configured.' };
+  const name = String(repo || '').trim();
+  if (!/^[^/\s]+\/[^/\s]+$/.test(name)) {
+    return { success: false, reason: 'format', error: 'Enter the repository as owner/repo-name.' };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  let response;
+  try {
+    response = await fetch(`https://api.github.com/repos/${name}`, {
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'LeetSync-Chrome-Extension',
+      },
+    });
+  } catch (error) {
+    clearTimeout(timeoutId);
+    return { success: false, reason: 'network', error: error.name === 'AbortError'
+      ? 'Timed out reaching GitHub \u2014 check your connection.' : `Could not reach GitHub: ${error.message}` };
+  }
+  clearTimeout(timeoutId);
+
+  const kind = TokenKind.of(token);
+  if (response.status === 401) {
+    return { success: false, reason: 'token', error: 'GitHub rejected this token (401). It may be mistyped, expired or revoked.' };
+  }
+  if (response.status === 404) {
+    return {
+      success: false, reason: 'missing',
+      error: kind === 'fine-grained'
+        ? `${name} was not found. Check the spelling, and that this token lists it under Repository access.`
+        : `${name} was not found. Check the spelling, and that the token belongs to an account that can see it.`,
+    };
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    return { success: false, reason: 'other', error: body.message || `GitHub answered ${response.status}.` };
+  }
+
+  const data = await response.json();
+  if (kind === 'classic' || kind === 'oauth') {
+    const scopes = (response.headers.get('x-oauth-scopes') || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const canWrite = scopes.includes('repo') || (!data.private && scopes.includes('public_repo'));
+    if (!canWrite) {
+      return {
+        success: false, reason: 'scope',
+        error: `This token can read ${data.full_name} but cannot write to it \u2014 it is missing the `
+          + '"repo" scope. Create a new classic token with "repo" ticked.',
+      };
+    }
+  }
+  return { success: true, fullName: data.full_name, url: data.html_url, private: data.private };
+}
+
 async function testGitHubConnection(repo) {
   const settings = await chrome.storage.sync.get(['githubToken']);
   const token = settings.githubToken;
@@ -1429,6 +1564,10 @@ async function testGitHubConnection(repo) {
       return { success: false, error: body.message || `HTTP ${response.status}` };
     }
 
+    // Readable is not enough: a push is a write. Settings' Verify used to
+    // pass tokens that failed on every push.
+    const access = await verifyRepoAccess(repo);
+    if (!access.success) return { success: false, error: access.error, reason: access.reason };
     const repoData = await response.json();
     return {
       success: true,
@@ -2305,9 +2444,14 @@ async function ensureRepo(requestedName, isPrivate = false) {
   const repoName = maybeRepo || 'leetcode-solutions';
   const fullName = `${owner}/${repoName}`;
 
-  // Already there? Adopt it.
+  // Already there? Adopt it -- if this token can write to it. A classic
+  // token with no scopes reads a public repository perfectly well, and
+  // adopting on that basis is how setup finished for tokens that then failed
+  // every push.
   try {
     const existing = await githubAPI(`/repos/${fullName}`);
+    const access = await verifyRepoAccess(existing.full_name);
+    if (!access.success) return { success: false, error: access.error, reason: access.reason };
     await chrome.storage.sync.set({ githubRepo: existing.full_name });
     return {
       success: true,

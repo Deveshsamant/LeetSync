@@ -214,6 +214,10 @@ const stub = `
     }
   };
 
+  // ?fresh=1 is an install that has never chosen a theme: nothing stored, so
+  // the popup's new-user default decides.
+  if (params.get('fresh') === '1') delete store.uiTheme;
+
   // ?launcher=1 is the POPUP with setup incomplete: no token, no setup flag,
   // so popup.js shows the launcher rather than the wizard.
   if (params.get('launcher') === '1') {
